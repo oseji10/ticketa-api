@@ -14,7 +14,7 @@ Route::get('/qrcodes/meals/{filename}', function ($filename) {
 });
 
 Route::get('/qrcodes/events/{filename}', function ($filename) {
-    $path = storage_path('app/public/qrcodes/meals/' . $filename);
+    $path = storage_path('app/public/qrcodes/events/' . $filename);
     if (!file_exists($path)) abort(404);
     return response()->file($path);
 });
