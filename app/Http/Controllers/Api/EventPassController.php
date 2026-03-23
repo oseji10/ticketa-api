@@ -141,8 +141,12 @@ class EventPassController extends Controller
     }
 
 
-    public function downloadPdf(Event $event)
+public function downloadPdf(Event $event)
 {
+    set_time_limit(520);
+    ini_set('max_execution_time', 120);
+    ini_set('memory_limit', '512M');
+
     $passes = $event->passes()->orderBy('passId')->get();
 
     if ($passes->isEmpty()) {
@@ -152,9 +156,12 @@ class EventPassController extends Controller
         ], 404);
     }
 
+    $rows = $passes->chunk(5); // 5 per row
+
     $pdf = Pdf::loadView('pdf.event-passes', [
         'event' => $event,
         'passes' => $passes,
+        'rows' => $rows,
     ])->setPaper('a4', 'portrait');
 
     return $pdf->download("event-{$event->eventId}-passes.pdf");
