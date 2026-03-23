@@ -54,12 +54,12 @@ class EventPassController extends Controller
             ], 403);
         }
 
-        if ($event->passes()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Passes have already been generated for this event.',
-            ], 422);
-        }
+        // if ($event->passes()->exists()) {
+        //     return response()->json([
+        //         'success' => false,
+        //         'message' => 'Passes have already been generated for this event.',
+        //     ], 422);
+        // }
 
         $validated = $request->validate([
             'count' => ['required', 'integer', 'min:1', 'max:50000'],
