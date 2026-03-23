@@ -5,10 +5,19 @@
     <title>Event Passes</title>
 
     <style>
-        body {
+        @page {
+    size: A4;
+    margin: 10mm;
+}
+
+body {
+    font-family: DejaVu Sans, sans-serif;
+    margin: 0;
+}
+        /* body {
             font-family: DejaVu Sans, sans-serif;
             margin: 15px;
-        }
+        } */
 
         .header {
             text-align: center;
@@ -32,19 +41,19 @@
         }
 
         td {
-            vertical-align: top;
-            width: 33%;
-        }
+    vertical-align: top;
+    width: 20%; /* 100 / 5 = 20% */
+}
 
-        .ticket {
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 10px;
-            margin: 5px;
-            text-align: center;
-            height: 240px;
-            page-break-inside: avoid;
-        }
+      .ticket {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 6px;
+    margin: 3px;
+    text-align: center;
+    height: 200px;
+    page-break-inside: avoid;
+}
 
         .event-title {
             font-weight: bold;
@@ -83,14 +92,14 @@
 </div>
 
 @php
-    $chunks = $passes->chunk(3); // 3 per column
+    $chunks = $passes->chunk(5); // 3 per column
 @endphp
 
 <table>
-    <tr>
-        @foreach($chunks as $column)
-            <td>
-                @foreach($column as $pass)
+    @foreach($rows as $row)
+        <tr>
+            @foreach($row as $pass)
+                <td>
                     <div class="ticket">
                         <div class="event-title">
                             {{ $event->title }}
@@ -104,17 +113,22 @@
                         </div>
 
                         <div class="qr">
-                            <img src="{{ public_path('storage/' . $pass->qrPath) }}" width="100">
+                            <img src="{{ public_path('storage/' . $pass->qrPath) }}" width="90">
                         </div>
 
                         <div class="serial">
                             {{ $pass->serialNumber ?? $pass->passCode }}
                         </div>
                     </div>
-                @endforeach
-            </td>
-        @endforeach
-    </tr>
+                </td>
+            @endforeach
+
+            {{-- Fill empty cells if row < 5 --}}
+            @for($i = $row->count(); $i < 5; $i++)
+                <td></td>
+            @endfor
+        </tr>
+    @endforeach
 </table>
 
 </body>
