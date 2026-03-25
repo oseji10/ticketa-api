@@ -18,6 +18,7 @@ class Event extends Model
         'status',
         'passCount',
         'createdBy',
+
     ];
 
     public function mealSessions()
@@ -34,4 +35,15 @@ class Event extends Model
     {
         return $this->belongsTo(User::class, 'createdBy');
     }
+
+
+    public function attendees()
+{
+    return $this->hasMany(Attendee::class, 'eventId', 'eventId');
+}
+
+// public function passes()
+// {
+//     return $this->hasMany(EventPass::class, 'eventId', 'eventId');
+// }
 }

@@ -11,16 +11,24 @@ class EventPass extends Model
     protected $fillable = [
         'eventId',
         'passCode',
+        'attendeeId',
         'serialNumber',
         'qrPayload',
         'qrPath',
         'qrUrl',
         'status',
+        'isAssigned',
+        'assignedAt',
+        'assignedBy',
     ];
 
     public function event()
     {
         return $this->belongsTo(Event::class, 'eventId', 'eventId');
+    }
+
+     public function attendee(){
+        return $this->belongsTo(Attendee::class, 'attendeeId', 'attendeeId');
     }
 
     public function redemptions()

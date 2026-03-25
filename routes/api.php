@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AttendeeRegistrationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MealController;
 use App\Http\Controllers\Api\MealTicketController;
@@ -25,7 +26,7 @@ Route::prefix('auth')->group(function () {
 });
 
 Route::middleware(['auth:api', 'facility.scope'])->group(function () {
-Route::apiResource('meals', MealController::class);
+    Route::apiResource('meals', MealController::class);
     Route::patch('/meals/{meal}/status', [MealController::class, 'updateStatus']);
 
     Route::post('/meals/{meal}/generate-tickets', [MealTicketController::class, 'generate']);
@@ -62,7 +63,14 @@ Route::apiResource('meals', MealController::class);
     Route::get('/passes/{pass}/qr', [EventPassController::class, 'qr']);
     Route::get('/passes/{pass}/qr/download', [EventPassController::class, 'downloadQr']);
 
-Route::post('/scanner/redeem', [ScannerController::class, 'redeem']);
+    Route::post('/scanner/redeem', [ScannerController::class, 'redeem']);
     Route::get('/events/{event}/passes/download-pdf', [EventPassController::class, 'downloadPdf']);
 
+   
+    Route::post('search', [AttendeeRegistrationController::class, 'search']);
+    Route::get('/events/{event}/registered-attendees', [AttendeeRegistrationController::class, 'registeredAttendees']);
+    Route::prefix('events')->group(function () {
+    Route::post('/{event}/passes/verify', [AttendeeRegistrationController::class, 'verifyPass']);
+    Route::post('{event}/registrations', [AttendeeRegistrationController::class, 'register']);
+    });
 });

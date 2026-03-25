@@ -23,7 +23,7 @@ class EventPassGeneratorService
                     'eventId' => $event->eventId,
                     'passCode' => bin2hex(random_bytes(16)),
                     'serialNumber' => strtoupper(
-                        'EVP-' . str_pad((string) ($existingCount + $i + 1), 6, '0', STR_PAD_LEFT)
+                        'WM-' . str_pad((string) ($existingCount + $i + 1), 6, '0', STR_PAD_LEFT)
                     ),
                     'status' => 'active',
                 ]);

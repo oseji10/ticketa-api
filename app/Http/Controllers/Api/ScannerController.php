@@ -30,6 +30,16 @@ class ScannerController extends Controller
             'deviceName' => ['nullable', 'string', 'max:255'],
         ]);
 
+//         if (!$pass->isAssigned || !$pass->attendeeId) {
+//     return response()->json([
+//         'success' => false,
+//         'message' => 'This QR code has not been assigned to any attendee.',
+//         'data' => [
+//             'status' => 'unassigned_pass',
+//         ],
+//     ], 422);
+// }
+
         $result = $this->eventRedemptionService->redeem(
             token: trim($validated['token']),
             scanner: $scanner,
