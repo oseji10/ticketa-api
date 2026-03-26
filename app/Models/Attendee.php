@@ -31,7 +31,7 @@ class Attendee extends Model
         'accountName',
         'accountNumber',
         'photoUrl',
-        'accomodation',
+        'accommodation',
         'color',
 
         // REGISTRATION FIELDS
@@ -59,4 +59,33 @@ class Attendee extends Model
     {
         return $this->hasOne(EventPass::class, 'attendeeId', 'attendeeId');
     }
+
+    public function dailyAttendances()
+{
+    return $this->hasMany(DailyAttendance::class, 'attendeeId', 'attendeeId');
+}
+
+public function roomAllocations()
+{
+    return $this->hasMany(RoomAllocation::class, 'attendeeId', 'attendeeId');
+}
+
+public function activeRoomAllocation()
+{
+    return $this->hasOne(RoomAllocation::class, 'attendeeId', 'attendeeId')
+        ->where('status', 'active')
+        ->latest('allocationId');
+}
+
+public function currentRoomAllocation()
+{
+    return $this->hasOne(RoomAllocation::class, 'attendeeId', 'attendeeId')
+        // ->where('status', 'active')
+        ->latest('allocationId');
+}
+
+public function incidents()
+{
+    return $this->hasMany(Incident::class, 'attendeeId', 'attendeeId');
+}
 }

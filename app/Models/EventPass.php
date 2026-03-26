@@ -40,4 +40,9 @@ class EventPass extends Model
     {
         return $this->hasMany(ScanLog::class, 'passId', 'passId');
     }
+
+    public function dailyAttendances()
+{
+    return $this->hasMany(DailyAttendance::class, 'attendeeId', 'attendeeId');
+}
 }

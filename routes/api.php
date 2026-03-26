@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AttendeeRegistrationController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\DailyAttendanceController;
 use App\Http\Controllers\Api\MealController;
 use App\Http\Controllers\Api\MealTicketController;
 use App\Http\Controllers\Api\ScannerController;
@@ -10,6 +11,8 @@ use App\Http\Controllers\Api\MealSessionController;
 use App\Http\Controllers\Api\EventPassController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\RiskProfileController;
+use App\Http\Controllers\Api\RoomAllocationController;
+use App\Http\Controllers\Api\RoomCheckinController;
 use App\Http\Controllers\Api\ScreeningVisitController;
 use App\Http\Controllers\Api\TicketQrController;
 use App\Http\Controllers\ScannerController as ControllersScannerController;
@@ -65,12 +68,29 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
     Route::post('/scanner/redeem', [ScannerController::class, 'redeem']);
     Route::get('/events/{event}/passes/download-pdf', [EventPassController::class, 'downloadPdf']);
-
+    
+    Route::post('/events/{event}/attendance/scan', [DailyAttendanceController::class, 'scan']);
+   Route::get('/events/{event}/attendance', [DailyAttendanceController::class, 'index']);
+   Route::get('/events/{event}/attendance/summary', [DailyAttendanceController::class, 'summary']);
    
+       Route::get('/events/{event}/rooms', [RoomAllocationController::class, 'rooms']);
+
+    Route::post('/events/{event}/room-allocations/check-in', [RoomAllocationController::class, 'checkIn']);
+    Route::post('/events/{event}/room-allocations/reallocate', [RoomAllocationController::class, 'reallocate']);
+
+    Route::get('/events/{event}/attendees/{attendee}/current-room', [RoomAllocationController::class, 'attendeeCurrentRoom']);
+    Route::get('/events/{event}/attendees/{attendee}/room-allocation-history', [RoomAllocationController::class, 'attendeeAllocationHistory']);
+
     Route::post('search', [AttendeeRegistrationController::class, 'search']);
     Route::get('/events/{event}/registered-attendees', [AttendeeRegistrationController::class, 'registeredAttendees']);
+    Route::get('/events/{event}/registered-attendees2', [AttendeeRegistrationController::class, 'registeredAttendees2']);
+
+        Route::post('/events/{event}/room-checkins/checkin', [RoomCheckinController::class, 'checkin']);
+
+
     Route::prefix('events')->group(function () {
     Route::post('/{event}/passes/verify', [AttendeeRegistrationController::class, 'verifyPass']);
     Route::post('{event}/registrations', [AttendeeRegistrationController::class, 'register']);
+
     });
 });

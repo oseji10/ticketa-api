@@ -11,6 +11,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
+
+
 class AttendeeRegistrationController extends Controller
 {
     public function __construct(
@@ -35,7 +37,8 @@ $eventId = $validated['eventId'];
             // ->where('eventId', $eventId)
             ->where(function ($q) use ($query) {
                 $q->where('phone', $query)
-                  ->orWhere('uniqueId', $query);
+                  ->orWhere('uniqueId', $query)
+                  ->orWhere('uniqueId', 'LIKE', "%{$query}"); 
             })
             ->first();
 
@@ -204,7 +207,7 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
                 'uniqueId' => $attendee->uniqueId,
                 'phone' => $attendee->phone,
                 'gender' => $attendee->gender,
-                'accomodation' => $attendee->accommodation,
+                'accommodation' => $attendee->accommodation,
                 'color' => $attendee->color,
                 'serialNumber' => optional($attendee->pass)->serialNumber,
                 'registeredAt' => optional($attendee->registeredAt)?->format('Y-m-d H:i:s'),
@@ -220,4 +223,66 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
         ],
     ]);
 }
+
+
+    public function registeredAttendees2(Request $request, Event $event): JsonResponse
+    {
+        $search = trim((string) $request->query('search', ''));
+
+        $query = Attendee::with([
+                'currentRoomAllocation',
+            ])
+            ->where('eventId', $event->eventId);
+
+        // If you want only attendees that have been assigned a pass, uncomment this:
+        // $query->whereNotNull('passId');
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('phone', 'LIKE', "%{$search}%")
+                    ->orWhere('uniqueId', 'LIKE', "%{$search}%")
+                    ->orWhereRaw(
+                        "CONCAT(COALESCE(fullName, '')) LIKE ?",
+                        ["%{$search}%"]
+                    );
+            });
+        }
+
+        $attendees = $query
+            ->orderBy('fullName')
+            ->get()
+            ->map(function ($attendee) {
+                $allocation = $attendee->currentRoomAllocation;
+
+                return [
+                    'attendeeId' => $attendee->attendeeId,
+                    // 'fullName' => $attendee->firstName,
+                    // 'lastName' => $attendee->lastName,
+                    'fullName' => trim(($attendee->fullName ?? '')),
+                    'uniqueId' => $attendee->uniqueId,
+                    'phone' => $attendee->phone,
+                    'gender' => $attendee->gender,
+                    'passportUrl' => $attendee->passportUrl ?? null,
+                    'accommodation' => $attendee->accommodation ?? null,
+                    'color' => $attendee->color ?? null,
+
+                    'currentRoomAllocation' => $allocation ? [
+                        'allocationId' => $allocation->allocationId,
+                        'hotel' => $allocation->accommodation,
+                        'roomNumber' => $allocation->roomId,
+                        'checkedInAt' => optional($allocation->allocatedAt)->toDateTimeString(),
+                        'reason' => $allocation->reason,
+                        'status' => $allocation->status,
+                    ] : null,
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Registered attendees retrieved successfully.',
+            'data' => $attendees,
+        ]);
+    }
+
 }

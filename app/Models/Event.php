@@ -42,6 +42,26 @@ class Event extends Model
     return $this->hasMany(Attendee::class, 'eventId', 'eventId');
 }
 
+public function dailyAttendances()
+{
+    return $this->hasMany(DailyAttendance::class, 'eventId', 'eventId');
+}
+
+public function rooms()
+{
+    return $this->hasMany(Room::class, 'eventId', 'eventId');
+}
+
+public function roomAllocations()
+{
+    return $this->hasMany(RoomAllocation::class, 'eventId', 'eventId');
+}
+
+public function incidents()
+{
+    return $this->hasMany(Incident::class, 'eventId', 'eventId');
+}
+
 // public function passes()
 // {
 //     return $this->hasMany(EventPass::class, 'eventId', 'eventId');
