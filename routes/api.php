@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\MealSessionController;
 use App\Http\Controllers\Api\EventPassController;
 use App\Http\Controllers\Api\EventController;
+use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\RiskProfileController;
 use App\Http\Controllers\Api\RoomAllocationController;
 use App\Http\Controllers\Api\RoomCheckinController;
@@ -99,6 +100,20 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::prefix('events')->group(function () {
     Route::post('/{event}/passes/verify', [AttendeeRegistrationController::class, 'verifyPass']);
     Route::post('{event}/registrations', [AttendeeRegistrationController::class, 'register']);
-
     });
+
+
+            Route::get('/events/{event}/incidents', [IncidentController::class, 'index']);
+    Route::post('/events/{event}/incidents', [IncidentController::class, 'store']);
+    Route::get('/events/{event}/incidents/{incident}', [IncidentController::class, 'show']);
+
+    Route::patch('/events/{event}/incidents/{incident}/status', [IncidentController::class, 'updateStatus']);
+    Route::patch('/events/{event}/incidents/{incident}/assign', [IncidentController::class, 'assign']);
+    Route::patch('/events/{event}/incidents/{incident}/resolve', [IncidentController::class, 'resolve']);
+    Route::post('/events/{event}/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
+
+    Route::post('/events/{event}/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
+
+    Route::get('/events/{event}/attendees/{attendeeId}', [AttendeeRegistrationController::class, 'show']);
+    
 });

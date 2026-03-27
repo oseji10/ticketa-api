@@ -285,4 +285,24 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
         ]);
     }
 
+
+    public function show(Event $event, $attendeeId)
+{
+    $event_pass = EventPass::where('serialNumber', $attendeeId)->first();
+    $attendee = Attendee::where('eventId', $event->eventId)
+        ->where('attendeeId', $event_pass->attendeeId)
+        ->first();
+
+    if (!$attendee) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Attendee not found',
+        ], 404);
+    }
+
+    return response()->json([
+        'success' => true,
+        'data' => $attendee,
+    ]);
+}
 }

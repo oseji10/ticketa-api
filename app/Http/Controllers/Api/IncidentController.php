@@ -21,10 +21,10 @@ class IncidentController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user || !in_array($user->role, ['admin', 'supervisor'])) {
+        if (!$user) {
             abort(response()->json([
                 'success' => false,
-                'message' => 'Unauthorized. Only admin or supervisor can manage incidents.',
+                'message' => 'Unauthorized.',
             ], 403));
         }
     }
