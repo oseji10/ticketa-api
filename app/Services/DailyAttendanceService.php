@@ -2,13 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\Attendance;
 use App\Models\DailyAttendance;
 use App\Models\Event;
 use App\Models\EventPass;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 class DailyAttendanceService
 {
@@ -16,130 +16,173 @@ class DailyAttendanceService
         Event $event,
         string $token,
         ?string $deviceName = null,
-        ?string $scanSource = 'barcode',
-        ?string $attendanceDate = null
+        string $scanSource = 'barcode',
+        ?string $attendanceDate = null,
     ): array {
-        return DB::transaction(function () use ($event, $token, $deviceName, $scanSource, $attendanceDate) {
-            $date = $attendanceDate
-                ? Carbon::parse($attendanceDate)->toDateString()
-                : now()->toDateString();
+        $attendanceDateValue = $attendanceDate
+            ? Carbon::parse($attendanceDate)->toDateString()
+            : now()->toDateString();
 
-            $pass = EventPass::with('attendee')
-                ->lockForUpdate()
-                ->where('eventId', $event->eventId)
-                ->where('token', $token)
-                ->first();
+        $lockStatus = $this->getAttendanceLockStatus($event, $attendanceDateValue);
 
-            if (!$pass) {
-                return [
-                    'success' => false,
-                    'message' => 'Invalid barcode or QR code.',
-                    'data' => [
-                        'status' => 'invalid',
-                    ],
-                ];
-            }
-
-            if (!$pass->attendeeId || !$pass->attendee) {
-                return [
-                    'success' => false,
-                    'message' => 'This pass has not been assigned to any attendee.',
-                    'data' => [
-                        'status' => 'unassigned',
-                        'passId' => $pass->passId,
-                    ],
-                ];
-            }
-
-            if (isset($pass->status) && $pass->status !== 'active') {
-                return [
-                    'success' => false,
-                    'message' => 'This pass is not active.',
-                    'data' => [
-                        'status' => 'inactive_pass',
-                        'passId' => $pass->passId,
-                    ],
-                ];
-            }
-
-            // Optional event date guard:
-            // Uncomment if your events table has startDate and endDate columns.
-            /*
-            if ($event->startDate && $event->endDate) {
-                $eventStart = Carbon::parse($event->startDate)->toDateString();
-                $eventEnd = Carbon::parse($event->endDate)->toDateString();
-
-                if ($date < $eventStart || $date > $eventEnd) {
-                    return [
-                        'success' => false,
-                        'message' => 'Attendance cannot be marked outside the event dates.',
-                        'data' => [
-                            'status' => 'outside_event_dates',
-                            'attendanceDate' => $date,
-                        ],
-                    ];
-                }
-            }
-            */
-
-            $existing = DailyAttendance::where('eventId', $event->eventId)
-                ->where('eventPassId', $pass->passId)
-                ->whereDate('attendanceDate', $date)
-                ->first();
-
-            if ($existing) {
-                return [
-                    'success' => false,
-                    'message' => 'Attendance has already been marked for today.',
-                    'data' => [
-                        'status' => 'already_marked',
-                        'attendanceId' => $existing->attendanceId,
-                        'attendanceDate' => $existing->attendanceDate?->toDateString(),
-                        'markedAt' => optional($existing->markedAt)?->toDateTimeString(),
-                        'attendee' => [
-                            'attendeeId' => $pass->attendee->attendeeId,
-                            'name' => strtoupper(trim(($pass->attendee->firstName ?? '') . ' ' . ($pass->attendee->lastName ?? ''))),
-                            'uniqueId' => $pass->attendee->uniqueId,
-                            'phone' => $pass->attendee->phone,
-                        ],
-                    ],
-                ];
-            }
-
-            $attendance = DailyAttendance::create([
-                'eventId' => $event->eventId,
-                'attendeeId' => $pass->attendeeId,
-                'eventPassId' => $pass->passId,
-                'attendanceDate' => $date,
-                'markedAt' => now(),
-                'markedBy' => Auth::id(),
-                'deviceName' => $deviceName,
-                'scanSource' => $scanSource,
-            ]);
-
+        if ($lockStatus['isClosed']) {
             return [
-                'success' => true,
-                'message' => 'Attendance marked successfully.',
+                'success' => false,
+                'message' => $lockStatus['message'],
                 'data' => [
-                    'status' => 'marked',
-                    'attendanceId' => $attendance->attendanceId,
-                    'attendanceDate' => $attendance->attendanceDate?->toDateString(),
-                    'markedAt' => optional($attendance->markedAt)?->toDateTimeString(),
+                    'status' => 'attendance_closed',
+                    'attendanceDate' => $attendanceDateValue,
+                    'closeTime' => $lockStatus['closeTime'],
+                    'closeDateTime' => $lockStatus['closeDateTime'],
+                ],
+            ];
+        }
+
+        $pass = EventPass::with('attendee')
+            ->where('eventId', $event->eventId)
+            ->where(function ($query) use ($token) {
+                $query->where('passCode', $token)
+                    ->orWhere('serialNumber', $token);
+            })
+            ->first();
+
+        if (!$pass || !$pass->attendee) {
+            return [
+                'success' => false,
+                'message' => 'Invalid pass code.',
+                'data' => [
+                    'status' => 'invalid_pass',
+                    'attendanceDate' => $attendanceDateValue,
+                ],
+            ];
+        }
+
+        $existingAttendance = DailyAttendance::with(['attendee', 'pass'])
+            ->where('eventId', $event->eventId)
+            ->where('attendeeId', $pass->attendeeId)
+            ->whereDate('attendanceDate', $attendanceDateValue)
+            ->first();
+
+        if ($existingAttendance) {
+            return [
+                'success' => false,
+                'message' => 'Attendance has already been marked for this attendee today.',
+                'data' => [
+                    'status' => 'already_marked',
+                    'attendanceId' => $existingAttendance->attendanceId,
+                    'attendanceDate' => $existingAttendance->attendanceDate,
+                    'markedAt' => optional($existingAttendance->created_at)?->toDateTimeString(),
                     'attendee' => [
                         'attendeeId' => $pass->attendee->attendeeId,
-                        'name' => strtoupper(trim(($pass->attendee->firstName ?? '') . ' ' . ($pass->attendee->lastName ?? ''))),
+                        'name' => $this->resolveAttendeeName($pass->attendee),
                         'uniqueId' => $pass->attendee->uniqueId,
                         'phone' => $pass->attendee->phone,
-                        'gender' => $pass->attendee->gender ?? null,
+                        'gender' => $pass->attendee->gender,
                         'passportUrl' => $pass->attendee->passportUrl ?? null,
                     ],
                     'pass' => [
                         'passId' => $pass->passId,
-                        'serialNumber' => $pass->serialNumber ?? null,
-                        'token' => $pass->token,
+                        'serialNumber' => $pass->serialNumber,
                     ],
                 ],
             ];
+        }
+
+        $attendance = DB::transaction(function () use (
+            $event,
+            $pass,
+            $attendanceDateValue,
+            $deviceName,
+            $scanSource
+        ) {
+            return DailyAttendance::create([
+                'eventId' => $event->eventId,
+                'attendeeId' => $pass->attendeeId,
+                'eventPassId' => $pass->passId,
+                'attendanceDate' => $attendanceDateValue,
+                'deviceName' => $deviceName,
+                'scanSource' => $scanSource,
+                'markedBy' => Auth::id(),
+                'markedAt' => now(),
+            ]);
         });
+
+        return [
+            'success' => true,
+            'message' => 'Attendance marked successfully.',
+            'data' => [
+                'status' => 'marked',
+                'attendanceId' => $attendance->attendanceId,
+                'attendanceDate' => $attendance->attendanceDate,
+                'markedAt' => optional($attendance->created_at)?->toDateTimeString(),
+                'attendee' => [
+                    'attendeeId' => $pass->attendee->attendeeId,
+                    'name' => $this->resolveAttendeeName($pass->attendee),
+                    'uniqueId' => $pass->attendee->uniqueId,
+                    'phone' => $pass->attendee->phone,
+                    'gender' => $pass->attendee->gender,
+                    'passportUrl' => $pass->attendee->passportUrl ?? null,
+                ],
+                'pass' => [
+                    'passId' => $pass->passId,
+                    'serialNumber' => $pass->serialNumber,
+                ],
+            ],
+        ];
+    }
+
+    public function getAttendanceLockStatus(Event $event, ?string $attendanceDate = null): array
+    {
+        $attendanceDateValue = $attendanceDate
+            ? Carbon::parse($attendanceDate)->toDateString()
+            : now()->toDateString();
+
+        $lockEnabled = (bool) ($event->attendanceLockEnabled ?? true);
+        $closeTime = $event->attendanceCloseTime;
+
+        if (!$lockEnabled || !$closeTime) {
+            return [
+                'enabled' => false,
+                'isClosed' => false,
+                'closeTime' => null,
+                'closeDateTime' => null,
+                'message' => null,
+            ];
+        }
+
+        $today = now()->toDateString();
+
+        if ($attendanceDateValue !== $today) {
+            return [
+                'enabled' => true,
+                'isClosed' => true,
+                'closeTime' => $closeTime,
+                'closeDateTime' => null,
+                'message' => 'Attendance can only be marked for today before the closing time.',
+            ];
+        }
+
+        $closeDateTime = Carbon::parse($attendanceDateValue . ' ' . $closeTime);
+        $isClosed = now()->greaterThan($closeDateTime);
+
+        return [
+            'enabled' => true,
+            'isClosed' => $isClosed,
+            'closeTime' => $closeTime,
+            'closeDateTime' => $closeDateTime->toDateTimeString(),
+            'message' => $isClosed
+                ? 'Attendance has closed for today.'
+                : 'Attendance is open.',
+        ];
+    }
+
+    protected function resolveAttendeeName($attendee): string
+    {
+        $fullName = trim(
+            ($attendee->fullName ?? '')
+        );
+
+        return $attendee->name
+            ?? ($fullName !== '' ? $fullName : 'Unknown attendee');
     }
 }

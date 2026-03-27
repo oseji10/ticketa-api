@@ -18,7 +18,12 @@ class Event extends Model
         'status',
         'passCount',
         'createdBy',
+        'attendanceCloseTime',
+        'attendanceLockEnabled',
+    ];
 
+     protected $casts = [
+        'attendanceLockEnabled' => 'boolean',
     ];
 
     public function mealSessions()

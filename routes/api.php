@@ -72,7 +72,14 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::post('/events/{event}/attendance/scan', [DailyAttendanceController::class, 'scan']);
    Route::get('/events/{event}/attendance', [DailyAttendanceController::class, 'index']);
    Route::get('/events/{event}/attendance/summary', [DailyAttendanceController::class, 'summary']);
-   
+   Route::get('/attendance/config', [DailyAttendanceController::class, 'config']);
+
+   Route::prefix('events/{event}/room-checkins')->group(function () {
+    Route::post('/scan-lookup', [RoomCheckinController::class, 'scanLookup']);
+    Route::post('/checkin', [RoomCheckinController::class, 'checkin']);
+    Route::post('/reallocate', [RoomCheckinController::class, 'reallocate']);
+});
+
        Route::get('/events/{event}/rooms', [RoomAllocationController::class, 'rooms']);
 
     Route::post('/events/{event}/room-allocations/check-in', [RoomAllocationController::class, 'checkIn']);
@@ -86,6 +93,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/events/{event}/registered-attendees2', [AttendeeRegistrationController::class, 'registeredAttendees2']);
 
         Route::post('/events/{event}/room-checkins/checkin', [RoomCheckinController::class, 'checkin']);
+        Route::post('/events/{event}/room-checkins/scan-checkin', [RoomCheckinController::class, 'scanCheckin']);
 
 
     Route::prefix('events')->group(function () {

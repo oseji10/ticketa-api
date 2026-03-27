@@ -47,47 +47,51 @@ class RoomAllocationController extends Controller
             'data' => $rooms,
         ]);
     }
+public function checkIn(Request $request, Event $event): JsonResponse
+{
+    $this->ensureSupervisorAccess();
 
-    public function checkIn(Request $request, Event $event): JsonResponse
-    {
-        $this->ensureSupervisorAccess();
+    $validated = $request->validate([
+        'attendeeId' => ['required', 'integer', 'exists:attendees,attendeeId'],
+        'hotel' => ['required', 'string', 'max:255'],
+        'roomNumber' => ['required', 'string', 'max:255'],
+    ]);
 
-        $validated = $request->validate([
-            'attendeeId' => ['required', 'integer', 'exists:attendees,attendeeId'],
-            'roomId' => ['required', 'integer', 'exists:rooms,roomId'],
-        ]);
+    $attendee = Attendee::findOrFail($validated['attendeeId']);
 
-        $attendee = Attendee::findOrFail($validated['attendeeId']);
-        $room = Room::findOrFail($validated['roomId']);
+    $result = $this->roomAllocationService->checkInAttendee(
+        $event,
+        $attendee,
+        $validated['hotel'],
+        $validated['roomNumber']
+    );
 
-        $result = $this->roomAllocationService->checkInAttendee($event, $attendee, $room);
+    return response()->json($result, $result['success'] ? 200 : 422);
+}
 
-        return response()->json($result, $result['success'] ? 200 : 422);
-    }
+public function reallocate(Request $request, Event $event): JsonResponse
+{
+    $this->ensureSupervisorAccess();
 
-    public function reallocate(Request $request, Event $event): JsonResponse
-    {
-        $this->ensureSupervisorAccess();
+    $validated = $request->validate([
+        'attendeeId' => ['required', 'integer', 'exists:attendees,attendeeId'],
+        'hotel' => ['required', 'string', 'max:255'],
+        'roomNumber' => ['required', 'string', 'max:255'],
+        'reason' => ['required', 'string', 'max:1000'],
+    ]);
 
-        $validated = $request->validate([
-            'attendeeId' => ['required', 'integer', 'exists:attendees,attendeeId'],
-            'roomId' => ['required', 'integer', 'exists:rooms,roomId'],
-            'reason' => ['required', 'string', 'max:1000'],
-        ]);
+    $attendee = Attendee::findOrFail($validated['attendeeId']);
 
-        $attendee = Attendee::findOrFail($validated['attendeeId']);
-        $room = Room::findOrFail($validated['roomId']);
+    $result = $this->roomAllocationService->reallocateAttendee(
+        $event,
+        $attendee,
+        $validated['hotel'],
+        $validated['roomNumber'],
+        $validated['reason']
+    );
 
-        $result = $this->roomAllocationService->reallocateAttendee(
-            $event,
-            $attendee,
-            $room,
-            $validated['reason']
-        );
-
-        return response()->json($result, $result['success'] ? 200 : 422);
-    }
-
+    return response()->json($result, $result['success'] ? 200 : 422);
+}
     public function attendeeCurrentRoom(Event $event, Attendee $attendee): JsonResponse
     {
         $allocation = RoomAllocation::with(['room', 'allocator'])

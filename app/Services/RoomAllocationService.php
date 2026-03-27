@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\Attendee;
 use App\Models\Event;
-use App\Models\Room;
 use App\Models\RoomAllocation;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -12,27 +11,29 @@ use Illuminate\Validation\ValidationException;
 
 class RoomAllocationService
 {
-    public function checkInAttendee(Event $event, Attendee $attendee, Room $room): array
+    public function checkInAttendee(Event $event, Attendee $attendee, string $hotel, string $roomNumber): array
     {
-        return DB::transaction(function () use ($event, $attendee, $room) {
+        return DB::transaction(function () use ($event, $attendee, $hotel, $roomNumber) {
             $attendee->refresh();
-            $room->refresh();
+
+            $hotel = trim($hotel);
+            $roomNumber = trim($roomNumber);
+
+            if ($hotel === '') {
+                throw ValidationException::withMessages([
+                    'hotel' => ['Hotel is required.'],
+                ]);
+            }
+
+            if ($roomNumber === '') {
+                throw ValidationException::withMessages([
+                    'roomNumber' => ['Room number is required.'],
+                ]);
+            }
 
             if ($attendee->eventId !== $event->eventId) {
                 throw ValidationException::withMessages([
                     'attendeeId' => ['Attendee does not belong to this event.'],
-                ]);
-            }
-
-            if ($room->eventId !== $event->eventId) {
-                throw ValidationException::withMessages([
-                    'roomId' => ['Selected room does not belong to this event.'],
-                ]);
-            }
-
-            if ($room->status !== 'active') {
-                throw ValidationException::withMessages([
-                    'roomId' => ['Selected room is not active.'],
                 ]);
             }
 
@@ -49,48 +50,17 @@ class RoomAllocationService
                     'data' => [
                         'status' => 'already_checked_in',
                         'allocationId' => $existingActive->allocationId,
-                        'roomId' => $existingActive->roomId,
+                        'hotel' => $existingActive->hotel,
+                        'roomNumber' => $existingActive->roomNumber,
                     ],
-                ];
-            }
-
-            $activeCount = RoomAllocation::where('eventId', $event->eventId)
-                ->where('roomId', $room->roomId)
-                ->where('status', 'active')
-                ->count();
-
-            if ($room->capacity > 0 && $activeCount >= $room->capacity) {
-                return [
-                    'success' => false,
-                    'message' => 'This room is already full.',
-                    'data' => [
-                        'status' => 'room_full',
-                        'roomId' => $room->roomId,
-                        'capacity' => $room->capacity,
-                        'occupied' => $activeCount,
-                    ],
-                ];
-            }
-
-            if ($room->gender !== 'mixed' && !empty($attendee->gender)) {
-                $attendeeGender = strtolower((string) $attendee->gender);
-                if ($attendeeGender !== strtolower($room->gender)) {
-                    return [
-                        'success' => false,
-                        'message' => 'Attendee gender does not match this room allocation policy.',
-                        'data' => [
-                            'status' => 'gender_mismatch',
-                            'attendeeGender' => $attendee->gender,
-                            'roomGender' => $room->gender,
-                        ],
-                    ];
                 ];
             }
 
             $allocation = RoomAllocation::create([
                 'eventId' => $event->eventId,
                 'attendeeId' => $attendee->attendeeId,
-                'roomId' => $room->roomId,
+                'hotel' => $hotel,
+                'roomNumber' => $roomNumber,
                 'allocationType' => 'initial',
                 'status' => 'active',
                 'allocatedAt' => now(),
@@ -104,19 +74,39 @@ class RoomAllocationService
                 'message' => 'Attendee checked into room successfully.',
                 'data' => [
                     'status' => 'checked_in',
-                    'allocation' => $allocation->load('room'),
+                    'allocation' => $allocation,
                 ],
             ];
         });
     }
 
-    public function reallocateAttendee(Event $event, Attendee $attendee, Room $newRoom, string $reason): array
-    {
-        return DB::transaction(function () use ($event, $attendee, $newRoom, $reason) {
+    public function reallocateAttendee(
+        Event $event,
+        Attendee $attendee,
+        string $hotel,
+        string $roomNumber,
+        string $reason
+    ): array {
+        return DB::transaction(function () use ($event, $attendee, $hotel, $roomNumber, $reason) {
             $attendee->refresh();
-            $newRoom->refresh();
 
-            if (trim($reason) === '') {
+            $hotel = trim($hotel);
+            $roomNumber = trim($roomNumber);
+            $reason = trim($reason);
+
+            if ($hotel === '') {
+                throw ValidationException::withMessages([
+                    'hotel' => ['Hotel is required.'],
+                ]);
+            }
+
+            if ($roomNumber === '') {
+                throw ValidationException::withMessages([
+                    'roomNumber' => ['Room number is required.'],
+                ]);
+            }
+
+            if ($reason === '') {
                 throw ValidationException::withMessages([
                     'reason' => ['Reason is required for reallocation.'],
                 ]);
@@ -125,18 +115,6 @@ class RoomAllocationService
             if ($attendee->eventId !== $event->eventId) {
                 throw ValidationException::withMessages([
                     'attendeeId' => ['Attendee does not belong to this event.'],
-                ]);
-            }
-
-            if ($newRoom->eventId !== $event->eventId) {
-                throw ValidationException::withMessages([
-                    'roomId' => ['Selected room does not belong to this event.'],
-                ]);
-            }
-
-            if ($newRoom->status !== 'active') {
-                throw ValidationException::withMessages([
-                    'roomId' => ['Selected room is not active.'],
                 ]);
             }
 
@@ -156,49 +134,20 @@ class RoomAllocationService
                 ];
             }
 
-            if ((int) $currentAllocation->roomId === (int) $newRoom->roomId) {
+            $sameHotel = strtolower(trim((string) $currentAllocation->hotel)) === strtolower($hotel);
+            $sameRoomNumber = strtolower(trim((string) $currentAllocation->roomNumber)) === strtolower($roomNumber);
+
+            if ($sameHotel && $sameRoomNumber) {
                 return [
                     'success' => false,
-                    'message' => 'Attendee is already allocated to this room.',
+                    'message' => 'Attendee is already allocated to this hotel and room number.',
                     'data' => [
                         'status' => 'same_room',
+                        'hotel' => $currentAllocation->hotel,
+                        'roomNumber' => $currentAllocation->roomNumber,
                     ],
                 ];
             }
-
-            $activeCount = RoomAllocation::where('eventId', $event->eventId)
-                ->where('roomId', $newRoom->roomId)
-                ->where('status', 'active')
-                ->count();
-
-            if ($newRoom->capacity > 0 && $activeCount >= $newRoom->capacity) {
-                return [
-                    'success' => false,
-                    'message' => 'The new room is already full.',
-                    'data' => [
-                        'status' => 'room_full',
-                        'roomId' => $newRoom->roomId,
-                        'capacity' => $newRoom->capacity,
-                        'occupied' => $activeCount,
-                    ],
-                ];
-            }
-
-           if ($room->gender !== 'mixed' && !empty($attendee->gender)) {
-    $attendeeGender = strtolower((string) $attendee->gender);
-
-    if ($attendeeGender !== strtolower($room->gender)) {
-        return [
-            'success' => false,
-            'message' => 'Attendee gender does not match this room allocation policy.',
-            'data' => [
-                'status' => 'gender_mismatch',
-                'attendeeGender' => $attendee->gender,
-                'roomGender' => $room->gender,
-            ],
-        ];
-    }
-}
 
             $currentAllocation->update([
                 'status' => 'moved',
@@ -207,10 +156,11 @@ class RoomAllocationService
             $newAllocation = RoomAllocation::create([
                 'eventId' => $event->eventId,
                 'attendeeId' => $attendee->attendeeId,
-                'roomId' => $newRoom->roomId,
+                'hotel' => $hotel,
+                'roomNumber' => $roomNumber,
                 'allocationType' => 'reallocation',
                 'status' => 'active',
-                'reason' => trim($reason),
+                'reason' => $reason,
                 'allocatedAt' => now(),
                 'allocatedBy' => Auth::id(),
                 'previousAllocationId' => $currentAllocation->allocationId,
@@ -222,7 +172,7 @@ class RoomAllocationService
                 'data' => [
                     'status' => 'reallocated',
                     'previousAllocationId' => $currentAllocation->allocationId,
-                    'allocation' => $newAllocation->load('room'),
+                    'allocation' => $newAllocation,
                 ],
             ];
         });
