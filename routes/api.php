@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AttendeeRegistrationController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\DailyAttendanceController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\MealController;
 use App\Http\Controllers\Api\MealTicketController;
 use App\Http\Controllers\Api\ScannerController;
@@ -115,5 +116,6 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::post('/events/{event}/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
 
     Route::get('/events/{event}/attendees/{attendeeId}', [AttendeeRegistrationController::class, 'show']);
-    
+    Route::get('/dashboard/issam-central', [DashboardController::class, 'issamCentral']);
+
 });
