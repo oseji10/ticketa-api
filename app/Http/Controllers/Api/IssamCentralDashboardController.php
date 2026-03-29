@@ -234,6 +234,7 @@ class IssamCentralDashboardController extends Controller
                 'ep.serialNumber',
                 'a.photoUrl'
             )
+            ->where('isRegistered', 1)
             ->orderBy('a.fullName')
             ->get();
 
