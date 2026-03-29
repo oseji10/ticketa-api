@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\ScreeningVisitController;
 use App\Http\Controllers\Api\TicketQrController;
 use App\Http\Controllers\ScannerController as ControllersScannerController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Api\IssamCentralDashboardController;
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -118,4 +119,8 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/events/{event}/attendees/{attendeeId}', [AttendeeRegistrationController::class, 'show']);
     Route::get('/dashboard/issam-central', [DashboardController::class, 'issamCentral']);
 
+
+
+// Route::get('/dashboard/issam-central', [IssamCentralDashboardController::class, 'index']);
+Route::get('/dashboard/issam-central/detail', [IssamCentralDashboardController::class, 'detail']);
 });
