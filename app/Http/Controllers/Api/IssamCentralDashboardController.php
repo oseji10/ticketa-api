@@ -270,12 +270,13 @@ class IssamCentralDashboardController extends Controller
                 'a.photoUrl',
                 'ep.serialNumber',
                 'da.attendanceDate',
+                DB::raw('UPPER(a.lga) as lga'),
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as markedBy")
             )
             ->whereDate('da.attendanceDate', $date)
             ->orderBy('a.fullName')
             ->get()
-            ->unique('attendeeId')
+            // ->unique('attendeeId')
             ->values()
             ->map(fn ($row) => [
                 'attendanceId' => $row->attendanceId,
@@ -286,7 +287,8 @@ class IssamCentralDashboardController extends Controller
                 'serialNumber' => $row->serialNumber,
                 'photoUrl' => $row->photoUrl,
                 'attendanceDate' => $row->attendanceDate,
-                'markedBy' => $row->markedBy,
+                // 'markedBy' => $row->markedBy,
+                'lga' => $row->lga,
             ]);
 
         return response()->json([
@@ -301,7 +303,8 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
-                ['key' => 'markedBy', 'label' => 'Marked By'],
+                ['key' => 'lga', 'label' => 'LGA'],
+                // ['key' => 'markedBy', 'label' => 'Marked By'],
                 ['key' => 'attendanceDate', 'label' => 'Attendance Date'],
             ],
             'rows' => $rows,
@@ -325,7 +328,8 @@ class IssamCentralDashboardController extends Controller
                 'a.phone',
                 'a.gender',
                 'a.photoUrl',
-                'ep.serialNumber'
+                'ep.serialNumber',
+                DB::raw('UPPER(a.lga) as lga'),
             )
             ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
             ->orderBy('fullName')
@@ -343,6 +347,7 @@ class IssamCentralDashboardController extends Controller
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
+                 ['key' => 'lga', 'label' => 'LGA'],
             ],
             'rows' => $rows,
         ]);
