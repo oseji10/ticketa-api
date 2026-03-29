@@ -355,7 +355,7 @@ class IssamCentralDashboardController extends Controller
 
     protected function attendancePercentageDetail(string $date): JsonResponse
     {
-        $totalParticipants = DB::table('attendees')->count();
+        $totalParticipants = DB::table('attendees')->where('isRegistered', 1)->count();
 
         $presentCount = DB::table('daily_attendances')
             ->whereDate('attendanceDate', $date)
