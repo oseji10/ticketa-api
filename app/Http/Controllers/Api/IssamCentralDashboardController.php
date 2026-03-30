@@ -322,20 +322,29 @@ class IssamCentralDashboardController extends Controller
             ->values();
 
         $rows = DB::table('attendees as a')
-        ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-            ->select(
-                'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
-                'a.gender',
-                'a.photoUrl',
-                'ep.serialNumber',
-                DB::raw('UPPER(a.lga) as lga'),
-            )
-            ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
-            ->where('isRegistered', 1)
-            ->orderBy('fullName')
-            ->get();
+    ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+    ->select(
+        'a.attendeeId',
+        'a.uniqueId',
+        DB::raw('UPPER(a.fullName) as fullName'),
+        'a.phone',
+        'a.gender',
+        'a.photoUrl',
+        DB::raw('MAX(ep.serialNumber) as serialNumber'),
+        DB::raw('UPPER(a.lga) as lga')
+    )
+    ->whereNotIn('a.attendeeId', $presentIds)
+    ->groupBy(
+        'a.attendeeId',
+        'a.uniqueId',
+        'a.fullName',
+        'a.phone',
+        'a.gender',
+        'a.photoUrl',
+        'a.lga'
+    )
+    ->orderBy('a.fullName')
+    ->get();
 
         return response()->json([
             'title' => 'Absent Participants',
