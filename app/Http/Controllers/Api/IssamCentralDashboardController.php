@@ -737,7 +737,7 @@ class IssamCentralDashboardController extends Controller
         ->join('event_passes as ep', 'ep.passId', '=', 'mr.passId')
         ->join('attendees as a', 'a.attendeeId', '=', 'ep.attendeeId')
             ->select(
-                'a.attendeeId',
+                'a.uniqueId',
                 DB::raw('UPPER(a.fullName) as fullName'),
                 'a.phone',
                 DB::raw('COUNT(mr.redemptionId) as mealCount')
@@ -754,7 +754,7 @@ class IssamCentralDashboardController extends Controller
                 'uniqueParticipantCount' => $rows->count(),
             ],
             'columns' => [
-                ['key' => 'attendeeId', 'label' => 'Participant ID'],
+                ['key' => 'uniqueId', 'label' => 'Participant ID'],
                 ['key' => 'fullName', 'label' => 'Full Name'],
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'mealCount', 'label' => 'Meals Collected'],
