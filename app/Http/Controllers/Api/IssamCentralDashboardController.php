@@ -333,6 +333,7 @@ class IssamCentralDashboardController extends Controller
                 DB::raw('UPPER(a.lga) as lga'),
             )
             ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
+            ->where('isRegistered', 1)
             ->orderBy('fullName')
             ->get();
 
