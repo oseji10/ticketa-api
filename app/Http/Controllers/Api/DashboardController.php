@@ -29,7 +29,6 @@ class DashboardController extends Controller
 
         $presentForDate = DB::table('daily_attendances')
             ->whereDate('attendanceDate', $selectedDateString)
-            ->where('isRegistered', 1)
             ->distinct('attendeeId')
             ->count('attendeeId');
 
