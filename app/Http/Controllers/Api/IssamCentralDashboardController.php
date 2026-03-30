@@ -745,6 +745,7 @@ class IssamCentralDashboardController extends Controller
                 DB::raw('COUNT(mr.redemptionId) as mealCount')
             )
             ->whereDate('mr.redeemedAt', $date)
+            ->where('a.isRegistered', 1)
             ->groupBy('a.attendeeId', 'a.fullName', 'a.phone')
             ->orderByDesc('mealCount')
             ->get();
