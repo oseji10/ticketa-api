@@ -322,7 +322,7 @@ class IssamCentralDashboardController extends Controller
             ->values();
 
         $rows = DB::table('attendees as a')
-        ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+        ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->select(
                 'a.uniqueId',
                 DB::raw('UPPER(a.fullName) as fullName'),
