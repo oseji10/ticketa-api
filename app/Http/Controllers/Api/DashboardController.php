@@ -57,7 +57,9 @@ class DashboardController extends Controller
 
         $mealsServedForDate = DB::table('meal_redemptions as mr')
             ->join('event_passes as ep', 'ep.passId', '=', 'mr.passId')
+            ->join('attendees as a', 'a.attendeeId', '=', 'ep.attendeeId')
             ->whereDate('mr.created_at', $selectedDateString)
+            ->where('a.isRegistered', 1)
             ->distinct('ep.attendeeId')
             ->count('ep.attendeeId');
 
