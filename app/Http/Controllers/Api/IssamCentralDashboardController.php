@@ -311,56 +311,48 @@ class IssamCentralDashboardController extends Controller
             'rows' => $rows,
         ]);
     }
-protected function absentParticipantsDetail(string $date): JsonResponse
-{
-    $presentIds = DB::table('daily_attendances')
-        ->whereDate('attendanceDate', $date)
-        ->distinct()
-        ->pluck('attendeeId');
 
-    $rows = DB::table('attendees as a')
-        ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-        ->select(
-            'a.attendeeId',
-            'a.uniqueId',
-            DB::raw('UPPER(a.fullName) as fullName'),
-            'a.phone',
-            'a.gender',
-            'a.photoUrl',
-            'ep.serialNumber',
-            DB::raw('UPPER(a.lga) as lga'),
-        )
-        ->whereNotIn('a.attendeeId', $presentIds)
-        ->groupBy(
-            'a.attendeeId',
-            'a.uniqueId',
-            'a.fullName',
-            'a.phone',
-            'a.gender',
-            'a.photoUrl',
-            'ep.serialNumber',
-            'a.lga'
-        )
-        ->orderBy('a.fullName')
-        ->get();
+    protected function absentParticipantsDetail(string $date): JsonResponse
+    {
+        $presentIds = DB::table('daily_attendances')
+            ->whereDate('attendanceDate', $date)
+            ->pluck('attendeeId')
+            ->unique()
+            ->filter()
+            ->values();
 
-    return response()->json([
-        'title' => 'Absent Participants',
-        'date' => $date,
-        'summary' => [
-            'absentCount' => $rows->count(),
-        ],
-        'columns' => [
-            ['key' => 'uniqueId', 'label' => 'Participant ID'],
-            ['key' => 'fullName', 'label' => 'Full Name'],
-            ['key' => 'phone', 'label' => 'Phone Number'],
-            ['key' => 'gender', 'label' => 'Gender'],
-            ['key' => 'serialNumber', 'label' => 'Serial Number'],
-            ['key' => 'lga', 'label' => 'LGA'],
-        ],
-        'rows' => $rows,
-    ]);
-}
+        $rows = DB::table('attendees as a')
+        ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+            ->select(
+                'a.uniqueId',
+                DB::raw('UPPER(a.fullName) as fullName'),
+                'a.phone',
+                'a.gender',
+                'a.photoUrl',
+                'ep.serialNumber',
+                DB::raw('UPPER(a.lga) as lga'),
+            )
+            ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
+            ->orderBy('fullName')
+            ->get();
+
+        return response()->json([
+            'title' => 'Absent Participants',
+            'date' => $date,
+            'summary' => [
+                'absentCount' => $rows->count(),
+            ],
+            'columns' => [
+                ['key' => 'uniqueId', 'label' => 'Participant ID'],
+                ['key' => 'fullName', 'label' => 'Full Name'],
+                ['key' => 'phone', 'label' => 'Phone Number'],
+                ['key' => 'gender', 'label' => 'Gender'],
+                ['key' => 'serialNumber', 'label' => 'Serial Number'],
+                 ['key' => 'lga', 'label' => 'LGA'],
+            ],
+            'rows' => $rows,
+        ]);
+    }
 
     protected function attendancePercentageDetail(string $date): JsonResponse
     {
