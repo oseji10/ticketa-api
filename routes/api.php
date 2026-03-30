@@ -123,4 +123,5 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
 // Route::get('/dashboard/issam-central', [IssamCentralDashboardController::class, 'index']);
 Route::get('/dashboard/issam-central/detail', [IssamCentralDashboardController::class, 'detail']);
+Route::get('dashboard/issam-central/attendance-trend', [IssamCentralDashboardController::class, 'attendanceTrend']);
 });

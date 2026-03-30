@@ -58,32 +58,51 @@ class IssamCentralDashboardController extends Controller
     $normalized = strtolower(trim((string) $title));
 
     return match ($normalized) {
-        'total participants' => $this->totalParticipantsDetail($date),
+        // ── Accredited / total ──────────────────────────────────────
+        'total participants',
+        'total accredited participants' => $this->totalParticipantsDetail($date),
 
+        // ── Accredited by gender ────────────────────────────────────
+        'accredited male'   => $this->accreditedByGenderDetail($date, 'male'),
+        'accredited female' => $this->accreditedByGenderDetail($date, 'female'),
+
+        // ── Present ─────────────────────────────────────────────────
         'present today',
         'present for date',
-        'present participants' => $this->presentParticipantsDetail($date),
+        'present participants',
+        'total present for selected date' => $this->presentParticipantsDetail($date),
 
+        // ── Absent ──────────────────────────────────────────────────
         'absent today',
         'absent for date',
-        'absent participants' => $this->absentParticipantsDetail($date),
+        'absent participants',
+        'total absent for selected date' => $this->absentParticipantsDetail($date),
 
+        // ── Attendance % ─────────────────────────────────────────────
         'attendance %',
         'attendance percentage',
         'attendance for date' => $this->attendancePercentageDetail($date),
 
+        // ── Present by gender ────────────────────────────────────────
+        'males present' => $this->presentByGenderDetail($date, 'male'),
+        'females present' => $this->presentByGenderDetail($date, 'female'),
+
+        // ── Late ─────────────────────────────────────────────────────
         'late arrivals',
         'late arrivals for date' => $this->lateArrivalsDetail($date),
 
+        // ── Incidents ────────────────────────────────────────────────
         'incidents today',
         'incidents for date' => $this->incidentsTodayDetail($date),
 
         'open incidents',
         'open incidents for date' => $this->openIncidentsDetail($date),
 
+        // ── Rooms ────────────────────────────────────────────────────
         'rooms checked',
         'rooms checked for date' => $this->roomsCheckedDetail($date),
 
+        // ── Meals ────────────────────────────────────────────────────
         'meals served',
         'meals served for date' => $this->mealsServedDetail($date),
 
@@ -96,6 +115,118 @@ class IssamCentralDashboardController extends Controller
         ], 422),
     };
 }
+
+
+
+protected function accreditedByGenderDetail(string $date, string $gender): JsonResponse
+{
+    $rows = DB::table('attendees as a')
+        ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
+        ->select(
+            'a.uniqueId',
+            DB::raw('UPPER(a.fullName) as fullName'),
+            'a.phone',
+            'ep.serialNumber',
+            'a.photoUrl'
+        )
+        ->where('a.isRegistered', 1)
+        ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
+        ->orderBy('a.fullName')
+        ->get();
+
+    $label = ucfirst($gender);
+
+    return response()->json([
+        'title' => "Accredited {$label}",
+        'date'  => $date,
+        'summary' => ['total' => $rows->count()],
+        'columns' => [
+            ['key' => 'photoUrl',      'label' => 'Passport'],
+            ['key' => 'uniqueId',      'label' => 'Participant ID'],
+            ['key' => 'fullName',      'label' => 'Full Name'],
+            ['key' => 'phone',         'label' => 'Phone Number'],
+            ['key' => 'serialNumber',  'label' => 'Serial Number'],
+        ],
+        'rows' => $rows,
+    ]);
+}
+
+protected function presentByGenderDetail(string $date, string $gender): JsonResponse
+{
+    $rows = DB::table('daily_attendances as da')
+        ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+        ->join('event_passes as ep', 'ep.passId', '=', 'da.eventPassId')
+        ->select(
+            'a.uniqueId',
+            DB::raw('UPPER(a.fullName) as fullName'),
+            'a.phone',
+            'a.photoUrl',
+            'ep.serialNumber',
+            'da.attendanceDate',
+            DB::raw('UPPER(a.lga) as lga')
+        )
+        ->whereDate('da.attendanceDate', $date)
+        ->where('a.isRegistered', 1)
+        ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
+        ->orderBy('a.fullName')
+        ->get()
+        ->map(fn($r) => [
+            'attendeeId'     => $r->uniqueId,
+            'fullName'       => $r->fullName,
+            'phone'          => $r->phone,
+            'photoUrl'       => $r->photoUrl,
+            'serialNumber'   => $r->serialNumber,
+            'attendanceDate' => $r->attendanceDate,
+            'lga'            => $r->lga,
+        ]);
+
+    $label = ucfirst($gender) . 's';
+
+    return response()->json([
+        'title'   => "{$label} Present",
+        'date'    => $date,
+        'summary' => ['presentCount' => $rows->count()],
+        'columns' => [
+            ['key' => 'attendeeId',     'label' => 'Participant ID'],
+            ['key' => 'fullName',       'label' => 'Full Name'],
+            ['key' => 'phone',          'label' => 'Phone Number'],
+            ['key' => 'serialNumber',   'label' => 'Serial Number'],
+            ['key' => 'lga',            'label' => 'LGA'],
+            ['key' => 'attendanceDate', 'label' => 'Attendance Date'],
+        ],
+        'rows' => $rows,
+    ]);
+}
+
+
+public function attendanceTrend(Request $request): JsonResponse
+{
+    $periodStart = Carbon::parse($request->query('periodStart', '2026-03-24'))->toDateString();
+    $periodEnd   = Carbon::parse($request->query('periodEnd',   '2026-03-30'))->toDateString();
+
+    $rows = DB::table('daily_attendances as da')
+        ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+        ->where('a.isRegistered', 1)
+        ->whereBetween(DB::raw('DATE(da.attendanceDate)'), [$periodStart, $periodEnd])
+        ->select(
+            DB::raw('DATE(da.attendanceDate) as date'),
+            DB::raw('COUNT(DISTINCT da.attendeeId) as present')
+        )
+        ->groupBy(DB::raw('DATE(da.attendanceDate)'))
+        ->orderBy('date')
+        ->get();
+
+    $total = DB::table('attendees')->where('isRegistered', 1)->count();
+
+    $trend = $rows->map(fn($r) => [
+        'date'    => Carbon::parse($r->date)->format('d M'),
+        'present' => (int) $r->present,
+        'absent'  => max($total - (int) $r->present, 0),
+    ]);
+
+    return response()->json(['data' => $trend]);
+}
+
 
     protected function handleRoomMetricDetail(string $date, ?string $metric): JsonResponse
     {
@@ -732,6 +863,43 @@ class IssamCentralDashboardController extends Controller
             'rows' => $rows,
         ]);
     }
+
+protected function genderSplitDetail(string $date): JsonResponse
+{
+    $rows = DB::table('daily_attendances as da')
+        ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+        ->select(
+            DB::raw("
+                CASE
+                    WHEN LOWER(a.gender) IN ('male', 'm') THEN 'Male'
+                    WHEN LOWER(a.gender) IN ('female', 'f') THEN 'Female'
+                    ELSE 'Other'
+                END as gender
+            "),
+            DB::raw('COUNT(DISTINCT da.attendeeId) as participantCount')
+        )
+        ->whereDate('da.attendanceDate', $date)
+        ->where('a.isRegistered', 1)
+        ->groupBy('gender')
+        ->orderBy('gender')
+        ->get();
+
+    return response()->json([
+        'title' => 'Gender Split',
+        'date' => $date,
+        'summary' => [
+            'totalParticipants' => $rows->sum('participantCount'),
+            'maleCount' => (int) ($rows->firstWhere('gender', 'Male')->participantCount ?? 0),
+            'femaleCount' => (int) ($rows->firstWhere('gender', 'Female')->participantCount ?? 0),
+            // 'otherCount' => (int) ($rows->firstWhere('gender', 'Other')->participantCount ?? 0),
+        ],
+        'columns' => [
+            ['key' => 'gender', 'label' => 'Gender'],
+            ['key' => 'participantCount', 'label' => 'Participant Count'],
+        ],
+        'rows' => $rows,
+    ]);
+}
 
     protected function uniqueMealsServedDetail(string $date): JsonResponse
     {
