@@ -275,6 +275,7 @@ class IssamCentralDashboardController extends Controller
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as markedBy")
             )
             ->whereDate('da.attendanceDate', $date)
+            ->where('a.isRegistered', 1)
             ->orderBy('a.fullName')
             ->get()
             // ->unique('attendeeId')
