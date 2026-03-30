@@ -27,10 +27,12 @@ class DashboardController extends Controller
             ->where('isRegistered', 1)
             ->count();
 
-        $presentForDate = DB::table('daily_attendances')
-            ->whereDate('attendanceDate', $selectedDateString)
-            ->distinct('attendeeId')
-            ->count('attendeeId');
+        $presentForDate = DB::table('daily_attendances as da')
+    ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+    ->whereDate('da.attendanceDate', $selectedDateString)
+    ->where('a.isRegistered', 1)
+    ->distinct()
+    ->count('da.attendeeId');
 
         $lateForDate = 0;
 
