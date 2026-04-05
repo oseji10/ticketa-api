@@ -557,7 +557,7 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function incidentsTodayDetail(string $date): JsonResponse
     {
-        $rows = DB::table('incident_reports as ir')
+        $rows = DB::table('incidents as ir')
             ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ir.attendeeId')
             ->select(
                 'ir.incidentId',
@@ -593,7 +593,7 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function openIncidentsDetail(string $date): JsonResponse
     {
-        $rows = DB::table('incident_reports as ir')
+        $rows = DB::table('incidents as ir')
             ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ir.attendeeId')
             ->select(
                 'ir.incidentId',
