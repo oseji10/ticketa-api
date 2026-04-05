@@ -127,7 +127,7 @@ protected function accreditedByGenderDetail(string $date, string $gender): JsonR
             DB::raw('UPPER(a.fullName) as fullName'),
             'a.phone',
             'ep.serialNumber',
-            'a.lga',
+            DB::raw('UPPER(a.lga)'),
             'a.photoUrl'
         )
         ->where('a.isRegistered', 1)
