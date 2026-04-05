@@ -268,11 +268,11 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ir.severity',
                 'ir.status',
                 'ir.description',
-                'ir.occuredAt',
+                'ir.occurredAt',
                 DB::raw("COALESCE(a.fullName, '-') as participantName"),
                 DB::raw("COALESCE(CONCAT(u.firstName, ' ', u.lastName), '-') as reportedBy")
             )
-            ->whereDate('ir.occuredAt', $date)
+            ->whereDate('ir.occurredAt', $date)
             ->when($category, fn ($q) => $q->where('ir.category', $category))
             ->orderByDesc('ir.incidentId')
             ->get()
@@ -282,7 +282,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'severity' => $row->severity,
                 'status' => $row->status,
                 'description' => $row->description,
-                'occuredAt' => $row->occuredAt,
+                'occurredAt' => $row->occurredAt,
                 'participantName' => $row->participantName,
                 'reportedBy' => $row->reportedBy,
             ])
@@ -301,7 +301,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'participantName', 'label' => 'Participant'],
                 ['key' => 'reportedBy', 'label' => 'Reported By'],
-                ['key' => 'occuredAt', 'label' => 'Date'],
+                ['key' => 'occurredAt', 'label' => 'Date'],
                 ['key' => 'description', 'label' => 'Description'],
             ],
             'rows' => $rows,
@@ -565,10 +565,10 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ir.status',
                 'ir.severity',
                 'ir.description',
-                'ir.occuredAt',
+                'ir.occurredAt',
                 DB::raw("COALESCE(a.fullName, '-') as participantName")
             )
-            ->whereDate('ir.occuredAt', $date)
+            ->whereDate('ir.occurredAt', $date)
             ->orderByDesc('ir.incidentId')
             ->get();
 
@@ -584,7 +584,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 ['key' => 'severity', 'label' => 'Severity'],
                 ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'participantName', 'label' => 'Participant'],
-                ['key' => 'occuredAt', 'label' => 'Date'],
+                ['key' => 'occurredAt', 'label' => 'Date'],
                 ['key' => 'description', 'label' => 'Description'],
             ],
             'rows' => $rows,
@@ -601,11 +601,11 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ir.status',
                 'ir.severity',
                 'ir.description',
-                'ir.occuredAt',
+                'ir.occurredAt',
                 DB::raw("COALESCE(a.fullName, '-') as participantName")
             )
             ->where('ir.status', 'open')
-            ->whereDate('ir.occuredAt', '<=', $date)
+            ->whereDate('ir.occurredAt', '<=', $date)
             ->orderByDesc('ir.incidentId')
             ->get();
 
@@ -621,7 +621,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 ['key' => 'severity', 'label' => 'Severity'],
                 ['key' => 'status', 'label' => 'Status'],
                 ['key' => 'participantName', 'label' => 'Participant'],
-                ['key' => 'occuredAt', 'label' => 'Date'],
+                ['key' => 'occurredAt', 'label' => 'Date'],
                 ['key' => 'description', 'label' => 'Description'],
             ],
             'rows' => $rows,
