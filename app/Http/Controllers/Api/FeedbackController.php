@@ -169,7 +169,7 @@ class FeedbackController extends Controller
 
     private function buildStaffSummary(): \Illuminate\Support\Collection
     {
-        // Single avgPerformance — approachability and effectiveness removed
+        
         return DB::table('feedback_staff_ratings as fsr')
             ->join('users as u', 'u.id', '=', 'fsr.staff_id')
             ->join('roles as r', 'r.roleId', '=', 'u.role')
@@ -178,10 +178,11 @@ class FeedbackController extends Controller
                 DB::raw("TRIM(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) as name"),
                 'u.photo as image',
                 'r.roleName as role',
+                'u.portfolio as portfolio',
                 DB::raw('COUNT(DISTINCT fsr.feedback_submission_id) as responseCount'),
                 DB::raw('ROUND(AVG(fsr.performance), 2) as avgPerformance')
             )
-            ->groupBy('u.id', 'u.firstName', 'u.lastName', 'u.photo', 'r.roleName')
+            ->groupBy('u.id', 'u.firstName', 'u.lastName', 'u.photo', 'r.roleName', 'u.portfolio')
             ->orderByDesc('avgPerformance')
             ->get();
     }
@@ -217,6 +218,7 @@ class FeedbackController extends Controller
                     'name'     => $row->name,
                     'role'     => $row->role,
                     'image'    => $row->image,
+
                     'comments' => [],
                 ];
             }
