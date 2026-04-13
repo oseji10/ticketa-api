@@ -18,12 +18,10 @@ return new class extends Migration
                   ->nullOnDelete();
 
             // General programme evaluation
-            $table->tinyInteger('overall_rating');          // 1–5
-            $table->tinyInteger('organization');             // 1–5
-            $table->tinyInteger('communication');            // 1–5
+            $table->tinyInteger('overall_rating');
+            $table->tinyInteger('organization');
+            $table->tinyInteger('communication');
             $table->enum('respected', ['yes', 'somewhat', 'no']);
-
-            // New questions
             $table->enum('contributed_to_learning', ['yes', 'somewhat', 'no']);
             $table->enum('would_participate_again', ['yes', 'maybe', 'no']);
 
@@ -38,15 +36,15 @@ return new class extends Migration
                   ->constrained('feedback_submissions')
                   ->cascadeOnDelete();
 
+            // staff_id → users.id (staff are resolved from users via roles)
             $table->unsignedBigInteger('staff_id');
             $table->foreign('staff_id')
                   ->references('id')
                   ->on('users')
                   ->cascadeOnDelete();
 
+            // Single performance rating — approachability and effectiveness removed
             $table->tinyInteger('performance');
-            $table->tinyInteger('approachability');
-            $table->tinyInteger('effectiveness');
             $table->text('strength')->nullable();
             $table->text('improvement')->nullable();
 

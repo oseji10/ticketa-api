@@ -18,13 +18,13 @@ class FeedbackController extends Controller
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'overallRating'          => ['required', 'integer', 'between:1,5'],
-            'organization'           => ['required', 'integer', 'between:1,5'],
-            'communication'          => ['required', 'integer', 'between:1,5'],
-            'respected'              => ['required', Rule::in(['yes', 'somewhat', 'no'])],
-            'contributedToLearning'  => ['required', Rule::in(['yes', 'somewhat', 'no'])],
-            'wouldParticipateAgain'  => ['required', Rule::in(['yes', 'maybe', 'no'])],
-            'staff'                  => ['required', 'array', 'min:1'],
+            'overallRating'         => ['required', 'integer', 'between:1,5'],
+            'organization'          => ['required', 'integer', 'between:1,5'],
+            'communication'         => ['required', 'integer', 'between:1,5'],
+            'respected'             => ['required', Rule::in(['yes', 'somewhat', 'no'])],
+            'contributedToLearning' => ['required', Rule::in(['yes', 'somewhat', 'no'])],
+            'wouldParticipateAgain' => ['required', Rule::in(['yes', 'maybe', 'no'])],
+            'staff'                 => ['required', 'array', 'min:1'],
         ]);
 
         $staffInput    = $validated['staff'];
@@ -37,12 +37,11 @@ class FeedbackController extends Controller
                 continue;
             }
 
+            // Only performance + two open-text fields
             $v = validator($rating, [
-                'performance'     => ['required', 'integer', 'between:1,5'],
-                'approachability' => ['required', 'integer', 'between:1,5'],
-                'effectiveness'   => ['required', 'integer', 'between:1,5'],
-                'strength'        => ['nullable', 'string', 'max:2000'],
-                'improvement'     => ['nullable', 'string', 'max:2000'],
+                'performance' => ['required', 'integer', 'between:1,5'],
+                'strength'    => ['nullable', 'string', 'max:2000'],
+                'improvement' => ['nullable', 'string', 'max:2000'],
             ]);
 
             if ($v->fails()) {
@@ -63,14 +62,14 @@ class FeedbackController extends Controller
         DB::beginTransaction();
         try {
             $submission = FeedbackSubmission::create([
-                'attendeeId'             => $request->user()?->attendeeId ?? null,
-                'overall_rating'         => (int) $validated['overallRating'],
-                'organization'           => (int) $validated['organization'],
-                'communication'          => (int) $validated['communication'],
-                'respected'              => $validated['respected'],
-                'contributed_to_learning'=> $validated['contributedToLearning'],
-                'would_participate_again'=> $validated['wouldParticipateAgain'],
-                'ip_address'             => $request->ip(),
+                'attendeeId'              => $request->user()?->attendeeId ?? null,
+                'overall_rating'          => (int) $validated['overallRating'],
+                'organization'            => (int) $validated['organization'],
+                'communication'           => (int) $validated['communication'],
+                'respected'               => $validated['respected'],
+                'contributed_to_learning' => $validated['contributedToLearning'],
+                'would_participate_again' => $validated['wouldParticipateAgain'],
+                'ip_address'              => $request->ip(),
             ]);
 
             foreach ($staffInput as $staffId => $rating) {
@@ -78,8 +77,6 @@ class FeedbackController extends Controller
                     'feedback_submission_id' => $submission->id,
                     'staff_id'               => (int) $staffId,
                     'performance'            => (int) $rating['performance'],
-                    'approachability'        => (int) $rating['approachability'],
-                    'effectiveness'          => (int) $rating['effectiveness'],
                     'strength'               => $rating['strength']    ?? null,
                     'improvement'            => $rating['improvement'] ?? null,
                 ]);
@@ -112,9 +109,9 @@ class FeedbackController extends Controller
         return response()->json([
             'success' => true,
             'data'    => [
-                'general'     => $this->buildGeneralSummary(),
-                'staff'       => $this->buildStaffSummary(),
-                'comments'    => $this->buildAllComments(),   // full comments, grouped by staff
+                'general'  => $this->buildGeneralSummary(),
+                'staff'    => $this->buildStaffSummary(),
+                'comments' => $this->buildAllComments(),
             ],
         ]);
     }
@@ -126,7 +123,13 @@ class FeedbackController extends Controller
         $general  = $this->buildGeneralSummary();
         $staff    = $this->buildStaffSummary();
         $comments = $this->buildAllComments();
-        $html     = $this->buildReportHtml('ISSAM Residential Training', now()->format('d M Y, H:i'), $general, $staff, $comments);
+        $html     = $this->buildReportHtml(
+            'ISSAM Residential Training',
+            now()->format('d M Y, H:i'),
+            $general,
+            $staff,
+            $comments
+        );
 
         $pdf = $this->wkhtmltopdfAvailable()
             ? $this->renderWithWkhtmltopdf($html)
@@ -151,15 +154,12 @@ class FeedbackController extends Controller
                 DB::raw('ROUND(AVG(overall_rating), 2) as avgOverallRating'),
                 DB::raw('ROUND(AVG(organization),   2) as avgOrganization'),
                 DB::raw('ROUND(AVG(communication),  2) as avgCommunication'),
-                // Respected
                 DB::raw('SUM(CASE WHEN respected = "yes"      THEN 1 ELSE 0 END) as respectedYes'),
                 DB::raw('SUM(CASE WHEN respected = "somewhat" THEN 1 ELSE 0 END) as respectedSomewhat'),
                 DB::raw('SUM(CASE WHEN respected = "no"       THEN 1 ELSE 0 END) as respectedNo'),
-                // Contributed to learning
                 DB::raw('SUM(CASE WHEN contributed_to_learning = "yes"      THEN 1 ELSE 0 END) as contributedYes'),
                 DB::raw('SUM(CASE WHEN contributed_to_learning = "somewhat" THEN 1 ELSE 0 END) as contributedSomewhat'),
                 DB::raw('SUM(CASE WHEN contributed_to_learning = "no"       THEN 1 ELSE 0 END) as contributedNo'),
-                // Would participate again
                 DB::raw('SUM(CASE WHEN would_participate_again = "yes"   THEN 1 ELSE 0 END) as participateYes'),
                 DB::raw('SUM(CASE WHEN would_participate_again = "maybe" THEN 1 ELSE 0 END) as participateMaybe'),
                 DB::raw('SUM(CASE WHEN would_participate_again = "no"    THEN 1 ELSE 0 END) as participateNo')
@@ -169,6 +169,7 @@ class FeedbackController extends Controller
 
     private function buildStaffSummary(): \Illuminate\Support\Collection
     {
+        // Single avgPerformance — approachability and effectiveness removed
         return DB::table('feedback_staff_ratings as fsr')
             ->join('users as u', 'u.id', '=', 'fsr.staff_id')
             ->join('roles as r', 'r.roleId', '=', 'u.role')
@@ -178,22 +179,13 @@ class FeedbackController extends Controller
                 'u.photo as image',
                 'r.roleName as role',
                 DB::raw('COUNT(DISTINCT fsr.feedback_submission_id) as responseCount'),
-                DB::raw('ROUND(AVG(fsr.performance),     2) as avgPerformance'),
-                DB::raw('ROUND(AVG(fsr.approachability), 2) as avgApproachability'),
-                DB::raw('ROUND(AVG(fsr.effectiveness),   2) as avgEffectiveness'),
-                DB::raw('ROUND(
-                    (AVG(fsr.performance) + AVG(fsr.approachability) + AVG(fsr.effectiveness)) / 3
-                , 2) as avgOverall')
+                DB::raw('ROUND(AVG(fsr.performance), 2) as avgPerformance')
             )
             ->groupBy('u.id', 'u.firstName', 'u.lastName', 'u.photo', 'r.roleName')
-            ->orderByDesc('avgOverall')
+            ->orderByDesc('avgPerformance')
             ->get();
     }
 
-    /**
-     * Returns ALL strength + improvement comments, grouped by staff user ID.
-     * Shape: [ staffId => [ 'name' => ..., 'role' => ..., 'comments' => [ [...], ... ] ] ]
-     */
     private function buildAllComments(): array
     {
         $rows = DB::table('feedback_staff_ratings as fsr')
@@ -278,37 +270,29 @@ class FeedbackController extends Controller
         \Illuminate\Support\Collection $staff,
         array $commentGroups
     ): string {
-        $total         = $general->totalSubmissions ?? 0;
-        $avgOverall    = number_format($general->avgOverallRating ?? 0, 1);
-        $avgOrg        = number_format($general->avgOrganization   ?? 0, 1);
-        $avgComm       = number_format($general->avgCommunication  ?? 0, 1);
+        $total      = $general->totalSubmissions ?? 0;
+        $avgOverall = number_format($general->avgOverallRating ?? 0, 1);
+        $avgOrg     = number_format($general->avgOrganization  ?? 0, 1);
+        $avgComm    = number_format($general->avgCommunication ?? 0, 1);
 
-        // Respected
         $rYes = $general->respectedYes ?? 0;
         $rSom = $general->respectedSomewhat ?? 0;
         $rNo  = $general->respectedNo ?? 0;
-
-        // Contributed
         $cYes = $general->contributedYes ?? 0;
         $cSom = $general->contributedSomewhat ?? 0;
         $cNo  = $general->contributedNo ?? 0;
-
-        // Participate again
         $pYes   = $general->participateYes ?? 0;
         $pMaybe = $general->participateMaybe ?? 0;
         $pNo    = $general->participateNo ?? 0;
 
-        // Staff table rows
+        // Staff table rows — single performance column
         $staffRows = '';
         $rank = 1;
         foreach ($staff as $s) {
-            $overall  = number_format($s->avgOverall ?? 0, 1);
-            $perf     = number_format($s->avgPerformance    ?? 0, 1);
-            $appr     = number_format($s->avgApproachability ?? 0, 1);
-            $eff      = number_format($s->avgEffectiveness  ?? 0, 1);
-            $barW     = round(($s->avgOverall ?? 0) / 5 * 100);
-            $barColor = $barW >= 80 ? '#059669' : ($barW >= 60 ? '#f59e0b' : '#f43f5e');
-            $medal    = $rank === 1 ? '1st' : ($rank === 2 ? '2nd' : ($rank === 3 ? '3rd' : "#{$rank}"));
+            $perf  = number_format($s->avgPerformance ?? 0, 1);
+            $barW  = round(($s->avgPerformance ?? 0) / 5 * 100);
+            $color = $barW >= 80 ? '#059669' : ($barW >= 60 ? '#f59e0b' : '#f43f5e');
+            $medal = $rank === 1 ? '1st' : ($rank === 2 ? '2nd' : ($rank === 3 ? '3rd' : "#{$rank}"));
 
             $staffRows .= "
             <tr>
@@ -318,20 +302,17 @@ class FeedbackController extends Controller
                     <div style='font-size:10px;color:#6b7280;margin-top:2px;'>{$s->role}</div>
                 </td>
                 <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-size:12px;'>{$s->responseCount}</td>
-                <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-size:12px;'>{$perf}</td>
-                <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-size:12px;'>{$appr}</td>
-                <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;text-align:center;font-size:12px;'>{$eff}</td>
-                <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;min-width:100px;'>
-                    <div style='font-size:13px;font-weight:700;color:{$barColor};margin-bottom:4px;'>{$overall}/5</div>
+                <td style='padding:10px 8px;border-bottom:1px solid #f0f0f0;min-width:120px;'>
+                    <div style='font-size:13px;font-weight:700;color:{$color};margin-bottom:4px;'>{$perf}/5</div>
                     <div style='background:#f3f4f6;border-radius:3px;height:6px;'>
-                        <div style='background:{$barColor};width:{$barW}%;height:6px;border-radius:3px;'></div>
+                        <div style='background:{$color};width:{$barW}%;height:6px;border-radius:3px;'></div>
                     </div>
                 </td>
             </tr>";
             $rank++;
         }
 
-        // Comments section
+        // Comments
         $commentHtml = '';
         foreach ($commentGroups as $group) {
             $staffName = htmlspecialchars($group['name'], ENT_QUOTES);
@@ -348,22 +329,19 @@ class FeedbackController extends Controller
             foreach ($group['comments'] as $c) {
                 if ($c['strength']) {
                     $s = htmlspecialchars($c['strength'], ENT_QUOTES);
-                    $commentHtml .= "
-                    <div style='margin:6px 0 6px 16px;padding:6px 10px;background:#f9fafb;border-radius:6px;'>
+                    $commentHtml .= "<div style='margin:6px 0 6px 16px;padding:6px 10px;background:#f9fafb;border-radius:6px;'>
                         <div style='font-size:10px;font-weight:700;color:#059669;margin-bottom:3px;'>&#10003; What this staff member did well:</div>
                         <div style='font-size:11px;color:#374151;line-height:1.5;'>{$s}</div>
                     </div>";
                 }
                 if ($c['improvement']) {
                     $i = htmlspecialchars($c['improvement'], ENT_QUOTES);
-                    $commentHtml .= "
-                    <div style='margin:6px 0 6px 16px;padding:6px 10px;background:#fffbeb;border-radius:6px;'>
+                    $commentHtml .= "<div style='margin:6px 0 6px 16px;padding:6px 10px;background:#fffbeb;border-radius:6px;'>
                         <div style='font-size:10px;font-weight:700;color:#d97706;margin-bottom:3px;'>&#9651; Areas for improvement:</div>
                         <div style='font-size:11px;color:#374151;line-height:1.5;'>{$i}</div>
                     </div>";
                 }
             }
-
             $commentHtml .= "</div>";
         }
 
@@ -375,29 +353,27 @@ class FeedbackController extends Controller
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8"/>
 <title>ISSAM Feedback Report</title>
 <style>
-  * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family: Arial, Helvetica, sans-serif; color:#111; background:#fff; font-size:13px; }
-  .cover { background:#064e3b; color:#fff; padding:48px 40px 40px; }
-  .cover h1 { font-size:28px; font-weight:700; margin-bottom:8px; }
-  .cover p  { font-size:13px; opacity:.75; margin-bottom:4px; }
-  .pill { display:inline-block; background:rgba(255,255,255,.15); border-radius:20px; padding:4px 12px; font-size:11px; margin-top:12px; margin-right:8px; }
-  .section { padding:28px 40px; }
-  .section-title { font-size:13px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.07em;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #d1fae5; }
-  .kpi-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px; }
-  .kpi { background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;border-left:4px solid #059669; }
-  .kpi-label { font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em; }
-  .kpi-val   { font-size:22px;font-weight:700;color:#065f46;margin-top:4px; }
-  .kpi-sub   { font-size:10px;color:#9ca3af;margin-top:2px; }
-  .sentiment-row { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px; }
-  .sentiment-box { border-radius:8px;padding:12px 14px;text-align:center; }
-  table { width:100%;border-collapse:collapse; }
-  th { background:#f0fdf4;color:#065f46;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:10px 8px;text-align:left;border-bottom:2px solid #d1fae5; }
-  th.center { text-align:center; }
-  .page-break { page-break-before:always; }
-  .footer { margin-top:40px;padding:12px 40px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:Arial,Helvetica,sans-serif;color:#111;background:#fff;font-size:13px;}
+  .cover{background:#064e3b;color:#fff;padding:48px 40px 40px;}
+  .cover h1{font-size:28px;font-weight:700;margin-bottom:8px;}
+  .cover p{font-size:13px;opacity:.75;margin-bottom:4px;}
+  .pill{display:inline-block;background:rgba(255,255,255,.15);border-radius:20px;padding:4px 12px;font-size:11px;margin-top:12px;margin-right:8px;}
+  .section{padding:28px 40px;}
+  .section-title{font-size:13px;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.07em;margin-bottom:16px;padding-bottom:8px;border-bottom:2px solid #d1fae5;}
+  .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+  .kpi{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;border-left:4px solid #059669;}
+  .kpi-label{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;}
+  .kpi-val{font-size:22px;font-weight:700;color:#065f46;margin-top:4px;}
+  .kpi-sub{font-size:10px;color:#9ca3af;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;}
+  th{background:#f0fdf4;color:#065f46;font-size:10px;text-transform:uppercase;letter-spacing:.05em;padding:10px 8px;text-align:left;border-bottom:2px solid #d1fae5;}
+  th.center{text-align:center;}
+  .page-break{page-break-before:always;}
+  .footer{margin-top:40px;padding:12px 40px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;}
 </style>
 </head>
 <body>
@@ -413,13 +389,13 @@ class FeedbackController extends Controller
 </div>
 
 <div class="section">
-  <div class="section-title">Programme Overview — Key Averages</div>
+  <div class="section-title">Programme Overview</div>
   <div class="kpi-grid">
     <div class="kpi"><div class="kpi-label">Total Submissions</div><div class="kpi-val">{$total}</div><div class="kpi-sub">Unique respondents</div></div>
     <div class="kpi"><div class="kpi-label">Overall Rating</div><div class="kpi-val">{$avgOverall}<span style="font-size:13px;color:#9ca3af;">/5</span></div><div class="kpi-sub">Management team</div></div>
-    <div class="kpi"><div class="kpi-label">Organisation</div><div class="kpi-val">{$avgOrg}<span style="font-size:13px;color:#9ca3af;">/5</span></div><div class="kpi-sub">Programme organisation</div></div>
-    <div class="kpi"><div class="kpi-label">Communication</div><div class="kpi-val">{$avgComm}<span style="font-size:13px;color:#9ca3af;">/5</span></div><div class="kpi-sub">From management</div></div>
-    <div class="kpi"><div class="kpi-label">Felt Respected — Yes</div><div class="kpi-val">{$rYes}</div><div class="kpi-sub">Somewhat: {$rSom} &middot; No: {$rNo}</div></div>
+    <div class="kpi"><div class="kpi-label">Organisation</div><div class="kpi-val">{$avgOrg}<span style="font-size:13px;color:#9ca3af;">/5</span></div></div>
+    <div class="kpi"><div class="kpi-label">Communication</div><div class="kpi-val">{$avgComm}<span style="font-size:13px;color:#9ca3af;">/5</span></div></div>
+    <div class="kpi"><div class="kpi-label">Felt Respected — Yes / Somewhat / No</div><div class="kpi-val">{$rYes}</div><div class="kpi-sub">Somewhat: {$rSom} &middot; No: {$rNo}</div></div>
     <div class="kpi"><div class="kpi-label">Contributed to Learning — Yes</div><div class="kpi-val">{$cYes}</div><div class="kpi-sub">Somewhat: {$cSom} &middot; No: {$cNo}</div></div>
   </div>
   <div class="kpi-grid" style="grid-template-columns:1fr;">
@@ -432,13 +408,10 @@ class FeedbackController extends Controller
   <table>
     <thead>
       <tr>
-        <th style="width:40px;">Rank</th>
+        <th style="width:45px;">Rank</th>
         <th>Staff Member</th>
-        <th class="center" style="width:70px;">Responses</th>
-        <th class="center" style="width:75px;">Performance</th>
-        <th class="center" style="width:85px;">Approachability</th>
-        <th class="center" style="width:80px;">Effectiveness</th>
-        <th style="width:110px;">Overall Score</th>
+        <th class="center" style="width:80px;">Responses</th>
+        <th style="width:140px;">Performance Rating</th>
       </tr>
     </thead>
     <tbody>{$staffRows}</tbody>
