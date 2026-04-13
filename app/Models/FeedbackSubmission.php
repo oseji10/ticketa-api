@@ -14,6 +14,7 @@ class FeedbackSubmission extends Model
         'communication',
         'respected',
         'ip_address',
+        'eventId'
     ];
 
     protected $casts = [

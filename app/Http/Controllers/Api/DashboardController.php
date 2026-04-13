@@ -35,7 +35,7 @@ class DashboardController extends Controller
         $selectedDateString = $selectedDate->toDateString();
 
         $programme = $activeEvent->title ?? 'ISSAM Residential Training';
-        $venue     = $activeEvent->location ?? 'Zaria';
+        $venue     = $activeEvent->location ?? 'ABU Zaria';
 
         $periodStart = Carbon::parse($activeEvent->startDate ?? $request->query('periodStart', '2026-03-24'))->toDateString();
         $periodEnd   = Carbon::parse($activeEvent->endDate   ?? $request->query('periodEnd',   '2026-03-30'))->toDateString();

@@ -27,6 +27,21 @@ class FeedbackController extends Controller
             'staff'                 => ['required', 'array', 'min:1'],
         ]);
 
+        // ── Resolve active event ──────────────────────────────────────────────
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')   // if multiple active, take the latest
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'data' => null,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
         $staffInput    = $validated['staff'];
         $validStaffIds = $this->resolveValidStaffUserIds();
         $staffErrors   = [];
@@ -70,6 +85,9 @@ class FeedbackController extends Controller
                 'contributed_to_learning' => $validated['contributedToLearning'],
                 'would_participate_again' => $validated['wouldParticipateAgain'],
                 'ip_address'              => $request->ip(),
+
+                'eventId'              => $eventId,
+
             ]);
 
             foreach ($staffInput as $staffId => $rating) {
