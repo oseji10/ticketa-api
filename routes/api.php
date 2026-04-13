@@ -135,5 +135,5 @@ Route::get('dashboard/issam-central/attendance-trend', [IssamCentralDashboardCon
 Route::get('/feedback/download-pdf', [FeedbackController::class, 'downloadPdf']);
 
     Route::get('/staff', [StaffController::class, 'index']);
-    Route::post('/feedback', [FeedbackController::class, 'store']);
+    // Route::post('/feedback', [FeedbackController::class, 'store']);
     Route::get('/feedback', [FeedbackController::class, 'summary']);
