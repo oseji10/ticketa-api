@@ -20,6 +20,10 @@ use App\Http\Controllers\Api\TicketQrController;
 use App\Http\Controllers\ScannerController as ControllersScannerController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\IssamCentralDashboardController;
+use App\Http\Controllers\Api\StaffController;
+use App\Http\Controllers\Api\FeedbackController;
+
+
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -68,6 +72,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::patch('/passes/{pass}/void', [EventPassController::class, 'void']);
     Route::get('/passes/{pass}/qr', [EventPassController::class, 'qr']);
     Route::get('/passes/{pass}/qr/download', [EventPassController::class, 'downloadQr']);
+    Route::patch('/events/{event}/status', [EventController::class, 'updateStatus']);
 
     Route::post('/scanner/redeem', [ScannerController::class, 'redeem']);
     Route::get('/events/{event}/passes/download-pdf', [EventPassController::class, 'downloadPdf']);
@@ -125,3 +130,10 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 Route::get('/dashboard/issam-central/detail', [IssamCentralDashboardController::class, 'detail']);
 Route::get('dashboard/issam-central/attendance-trend', [IssamCentralDashboardController::class, 'attendanceTrend']);
 });
+
+// Route::get('/staff', [StaffController::class, 'index']);
+Route::get('/feedback/download-pdf', [FeedbackController::class, 'downloadPdf']);
+
+    Route::get('/staff', [StaffController::class, 'index']);
+    Route::post('/feedback', [FeedbackController::class, 'store']);
+    Route::get('/feedback', [FeedbackController::class, 'summary']);

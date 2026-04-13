@@ -18,3 +18,9 @@ Route::get('/qrcodes/events/{filename}', function ($filename) {
     if (!file_exists($path)) abort(404);
     return response()->file($path);
 });
+
+Route::get('/staff_passports/{filename}', function ($filename) {
+    $path = storage_path('app/public/staff_passports/' . $filename);
+    if (!file_exists($path)) abort(404);
+    return response()->file($path);
+});

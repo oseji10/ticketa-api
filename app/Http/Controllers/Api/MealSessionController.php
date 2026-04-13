@@ -20,8 +20,10 @@ class MealSessionController extends Controller
         }
 
         $sessions = $query
-            ->orderBy('mealDate')
-            ->orderBy('startTime')
+            // ->orderBy('mealDate')
+            // ->orderBy('startTime')
+
+            ->latest('mealSessionId')
             ->paginate($request->integer('per_page', 20));
 
         return response()->json([

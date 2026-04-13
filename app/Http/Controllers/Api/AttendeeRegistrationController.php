@@ -192,11 +192,52 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
 
 
 
-    public function registeredAttendees(Event $event): JsonResponse
+//     public function registeredAttendees(Event $event): JsonResponse
+// {
+//     $attendees = Attendee::query()
+//         ->with(['pass'])
+//         ->where('eventId', $event->eventId)
+//         ->where('isRegistered', true)
+//         ->orderByDesc('registeredAt')
+//         ->get()
+//         ->map(function (Attendee $attendee) {
+//             return [
+//                 'attendeeId' => $attendee->attendeeId,
+//                 'fullName' => $attendee->fullName,
+//                 'uniqueId' => $attendee->uniqueId,
+//                 'phone' => $attendee->phone,
+//                 'gender' => $attendee->gender,
+//                 'accommodation' => $attendee->accommodation,
+//                 'color' => $attendee->color,
+//                 'serialNumber' => optional($attendee->pass)->serialNumber,
+//                 'registeredAt' => optional($attendee->registeredAt)?->format('Y-m-d H:i:s'),
+//             ];
+//         })
+//         ->values();
+
+//     return response()->json([
+//         'success' => true,
+//         'message' => 'Registered attendees retrieved successfully.',
+//         'data' => [
+//             'attendees' => $attendees,
+//         ],
+//     ]);
+// }
+
+public function registeredAttendees(): JsonResponse
 {
+    $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+
     $attendees = Attendee::query()
         ->with(['pass'])
-        ->where('eventId', $event->eventId)
+        ->where('eventId', $activeEvent->eventId)
         ->where('isRegistered', true)
         ->orderByDesc('registeredAt')
         ->get()
@@ -219,6 +260,7 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
         'success' => true,
         'message' => 'Registered attendees retrieved successfully.',
         'data' => [
+            'event' => $activeEvent->name ?? null,
             'attendees' => $attendees,
         ],
     ]);

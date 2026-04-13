@@ -7,6 +7,7 @@ use App\Models\Event;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class EventController extends Controller
 {
@@ -69,7 +70,7 @@ class EventController extends Controller
             'endDate' => $validated['endDate'],
             'location' => $validated['location'] ?? null,
             'status' => $validated['status'] ?? 'draft',
-            'passCount' => 0,
+            // 'passCount' => 0,
             'createdBy' => $request->user()->id,
         ]);
 
@@ -186,4 +187,35 @@ class EventController extends Controller
 
         return $slug;
     }
+
+
+
+  
+
+public function updateStatus(Request $request, Event $event): JsonResponse
+{
+    $validated = $request->validate([
+        'status' => [
+            'required',
+            Rule::in(['draft', 'active', 'closed', 'cancelled']),
+        ],
+    ]);
+
+    // 🚨 Important business rule (optional but recommended)
+    if ($validated['status'] === 'active') {
+        Event::where('status', 'active')
+            ->where('eventId', '!=', $event->id)
+            ->update(['status' => 'closed']);
+    }
+
+    $event->update([
+        'status' => $validated['status'],
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Event status updated successfully',
+        'data' => $event,
+    ]);
+}
 }
