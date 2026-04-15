@@ -159,7 +159,6 @@
 
 @php
     $passRows = $passes->chunk(2);
-    <!-- $logoPath = public_path('storage/images/wima-base.png'); -->
 
     $url = 'https://wimanigeria.com/assets/images/wima-base.png';
 $contents = file_get_contents($url);
