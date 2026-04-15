@@ -68,10 +68,10 @@
             border-radius: 6px;
         }
 
-        /* 🔥 FRONT DESIGN - BIGGER WHITE BOX */
+        /* 🔥 FRONT DESIGN */
         .front-box {
-            width: 280px;
-            height: 280px;
+            width: 240px;
+            height: 240px;
             margin: 0 auto 10px auto;
             box-sizing: border-box;
             border-radius: 10px;
@@ -84,7 +84,7 @@
             height: 100%;
             border-radius: 10px;
             box-sizing: border-box;
-            padding: 16px 14px;
+            padding: 12px 10px;
         }
 
         /* 🔥 LOGO (no oval, bigger) */
@@ -104,7 +104,7 @@
             font-weight: bold;
             text-transform: uppercase;
             line-height: 1.2;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
         }
 
         .front-subtitle {
@@ -113,19 +113,16 @@
             margin-bottom: 14px;
         }
 
-        /* 🔥 WHITE NAME BOX - BIGGER FOR MANUAL WRITING */
-        .name-write-box {
+        .serial-pill {
+            display: inline-block;
             background: #ffffff;
-            color: #000000;
-            padding: 28px 20px;
-            border-radius: 8px;
-            font-size: 11px;
-            margin-bottom: 16px;
+            color: #111111;
+            padding: 8px 16px;
+            border-radius: 999px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 12px;
             border: 1px solid #e5e5e5;
-            min-height: 60px;
-            text-align: center;
-            font-style: italic;
-            color: #888;
         }
 
         .front-footer {
@@ -162,57 +159,58 @@
 
 @php
     $passRows = $passes->chunk(2);
-    $logoPath = public_path('storage/images/wima-base.png');
+    <!-- $logoPath = public_path('storage/images/wima-base.png'); -->
+
+    $url = 'https://wimanigeria.com/assets/images/wima-base.png';
+$contents = file_get_contents($url);
+
+$fileName = 'logo.jpg';
+$path = storage_path('app/public/' . $fileName);
+
+file_put_contents($path, $contents);
+
+$logoPath = asset('storage/' . $fileName);
 @endphp
 
 @foreach($passRows as $row)
     <table class="passes-table">
         @foreach($row as $pass)
 
-                @php
-                // Extract numeric part from serial number
+            @php
                 $rawSerial = (string) ($pass->serialNumber ?? '');
                 preg_match('/(\d+)$/', $rawSerial, $matches);
                 $serial = isset($matches[1]) ? (int) $matches[1] : 0;
 
-                // Color allocation: 36 per color, 8 colors total (288 participants)
-                // After 288, use last color (brown)
-                if ($serial >= 1 && $serial <= 36) {
-                    // Color 1: Red
-                    $bg = '#EF4444'; $text = '#FFFFFF';
-                } elseif ($serial >= 37 && $serial <= 72) {
-                    // Color 2: Purple
-                    $bg = '#8B5CF6'; $text = '#FFFFFF';
-                } elseif ($serial >= 73 && $serial <= 108) {
-                    // Color 3: Green
-                    $bg = '#22C55E'; $text = '#FFFFFF';
-                } elseif ($serial >= 109 && $serial <= 144) {
-                    // Color 4: Blue
-                    $bg = '#3B82F6'; $text = '#FFFFFF';
-                } elseif ($serial >= 145 && $serial <= 180) {
-                    // Color 5: Yellow
-                    $bg = '#FACC15'; $text = '#000000';
-                } elseif ($serial >= 181 && $serial <= 216) {
-                    // Color 6: Pink
-                    $bg = '#EC4899'; $text = '#FFFFFF';
-                } elseif ($serial >= 217 && $serial <= 252) {
-                    // Color 7: Orange
+                if ($serial >= 1 && $serial <= 39) {
                     $bg = '#F59E0B'; $text = '#000000';
-                } elseif ($serial >= 253 && $serial <= 288) {
-                    // Color 8: Red
-                    $bg = '#964B00'; $text = '#FFFFFF';
+                } elseif ($serial >= 40 && $serial <= 78) {
+                    $bg = '#8B5CF6'; $text = '#FFFFFF';
+                } elseif ($serial >= 79 && $serial <= 117) {
+                    $bg = '#3B82F6'; $text = '#FFFFFF';
+                } elseif ($serial >= 118 && $serial <= 156) {
+                    $bg = '#FFFFFF'; $text = '#000000';
+                } elseif ($serial >= 157 && $serial <= 194) {
+                    $bg = '#FACC15'; $text = '#000000';
+                } elseif ($serial >= 195 && $serial <= 232) {
+                    $bg = '#22C55E'; $text = '#FFFFFF';
+                } elseif ($serial >= 233 && $serial <= 270) {
+                    $bg = '#EC4899'; $text = '#FFFFFF';
+                } elseif ($serial >= 271 && $serial <= 308) {
+                    $bg = '#EF4444'; $text = '#FFFFFF';
+                } elseif ($serial >= 309 && $serial <= 329) {
+                    $bg = '#8B4513'; $text = '#FFFFFF';
                 } else {
-                    // After 288, use last color (Red)
-                    $bg = '#964B00'; $text = '#FFFFFF';
+                    $bg = '#FFFFFF'; $text = '#000000';
                 }
             @endphp
+
             <tr>
 
-                <!-- LEFT: QR SIDE -->
+                <!-- LEFT: QR -->
                 <td>
                     <div class="ticket" style="background-color: {{ $bg }}; color: {{ $text }};">
                         <div class="event-title">
-                        {{ $event->title }}
+                            {{ $event->title }}
                         </div>
 
                         <div class="event-meta">
@@ -224,6 +222,8 @@
                             <img src="{{ public_path('storage/' . $pass->qrPath) }}">
                         </div>
 
+                        
+
                         <div class="serial">
                             {{ $pass->serialNumber }}
                         </div>
@@ -234,12 +234,12 @@
                     </div>
                 </td>
 
-                <!-- RIGHT: FRONT SIDE -->
+                <!-- RIGHT: FRONT -->
                 <td>
                     <div class="ticket" style="background-color: {{ $bg }}; color: {{ $text }};">
 
                         <div class="event-title">
-                            Year 2 Cohort 2
+                            {{ $event->title }}
                         </div>
 
                         <div class="event-meta">
@@ -258,9 +258,13 @@
                                     Programme Access Tag
                                 </div>
 
-                                <!-- 🔥 WHITE BOX FOR MANUAL NAME WRITING (No Serial Number) -->
-                                <div class="name-write-box">
-                                    (Write participant name here)
+                                <!-- <div class="front-subtitle">
+                                    This pass grants authorized access.<br>
+                                    Keep it safe and present it when required.
+                                </div> -->
+
+                                <div class="serial-pill">
+                                    {{ $pass->serialNumber }}
                                 </div>
 
                                 <div class="front-footer">
