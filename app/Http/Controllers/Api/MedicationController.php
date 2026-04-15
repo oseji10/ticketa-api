@@ -286,8 +286,8 @@ class MedicationController extends Controller
         // Search by name or attendee ID
         $attendees = $query->where(function ($q) use ($searchTerm) {
             $q->where('fullName', 'like', "%{$searchTerm}%")
-              ->orWhere('attendeeId', 'like', "%{$searchTerm}%")
-              ->orWhere('phone', 'like', "%{$searchTerm}%");
+              ->orWhere('phone', 'like', "%{$searchTerm}%")
+              ->orWhere('attendeeId', 'like', "%{$searchTerm}%");
         })
         ->orderBy('fullName')
         ->limit(10)
@@ -508,6 +508,206 @@ class MedicationController extends Controller
         return response()->json([
             'success' => true,
             'records' => $dispensingRecords,
+        ]);
+    }
+
+    /**
+     * Get all recipients with medication history (paginated)
+     */
+    public function getAllRecipients(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // Get all dispensing records
+        $query = MedicationDispensing::where('eventId', $eventId)
+            ->with(['attendee', 'supply', 'dispenser']);
+
+        // If search term provided, filter
+        $searchTerm = $request->input('search');
+        if ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm) {
+                $q->whereHas('attendee', function ($attendeeQuery) use ($searchTerm) {
+                    $attendeeQuery->where('fullName', 'like', "%{$searchTerm}%");
+                })
+                ->orWhere('recipientName', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        $records = $query->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($record) {
+                $isParticipant = !empty($record->attendeeId);
+                $recipientName = $isParticipant 
+                    ? ($record->attendee->fullName ?? 'Unknown')
+                    : $record->recipientName;
+
+                return [
+                    'dispensingId' => $record->dispensingId,
+                    'recipientName' => $recipientName,
+                    'recipientType' => $record->recipientType ?? 'participant',
+                    'isParticipant' => $isParticipant,
+                    'attendeeId' => $record->attendeeId,
+                    'uniqueId' => $record->uniqueId,
+                    'photo' => $isParticipant ? ($record->attendee->photoUrl ?? null) : null,
+                    'phoneNumber' => $isParticipant ? ($record->attendee->phoneNumber ?? null) : null,
+                    'state' => $isParticipant ? ($record->attendee->state ?? null) : null,
+                    'lga' => $isParticipant ? ($record->attendee->lga ?? null) : null,
+                    'recipientNotes' => $record->recipientNotes,
+                    'drugName' => $record->drugName,
+                    'quantityDispensed' => $record->quantityDispensed,
+                    'symptoms' => $record->symptoms,
+                    'instructions' => $record->instructions,
+                    'batchNumber' => $record->supply->batchNumber ?? 'N/A',
+                    'dispensedBy' => $record->dispenser->name ?? 'N/A',
+                    'dispensedAt' => $record->created_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+        // Group by recipient
+        $grouped = $records->groupBy('recipientName')->map(function ($items, $name) {
+            $first = $items->first();
+            return [
+                'recipientName' => $name,
+                'recipientType' => $first['recipientType'],
+                'isParticipant' => $first['isParticipant'],
+                'attendeeId' => $first['attendeeId'],
+                'uniqueId' => $first['uniqueId'],
+                'photo' => $first['photo'],
+                'phoneNumber' => $first['phoneNumber'],
+                'state' => $first['state'],
+                'lga' => $first['lga'],
+                'totalDispensings' => $items->count(),
+                'lastDispensedAt' => $items->first()['dispensedAt'], // Most recent
+                'history' => $items->values(),
+            ];
+        })->values();
+
+        // Sort by most recent dispensing
+        $sorted = $grouped->sortByDesc('lastDispensedAt')->values();
+
+        // Manual pagination
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 20);
+        $total = $sorted->count();
+        $lastPage = ceil($total / $perPage);
+        
+        $paginatedResults = $sorted->slice(($page - 1) * $perPage, $perPage)->values();
+
+        return response()->json([
+            'success' => true,
+            'recipients' => $paginatedResults,
+            'pagination' => [
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => $lastPage,
+                'from' => $total > 0 ? (($page - 1) * $perPage) + 1 : 0,
+                'to' => min($page * $perPage, $total),
+            ],
+        ]);
+    }
+
+    /**
+     * Search medication history by recipient name (for participants and non-participants)
+     */
+    public function searchRecipientHistory(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $validated = $request->validate([
+            'search' => ['required', 'string', 'min:2'],
+        ]);
+
+        $searchTerm = $validated['search'];
+
+        // Search in both participants and non-participants
+        $query = MedicationDispensing::where('eventId', $eventId)
+            ->with(['attendee', 'supply', 'dispenser']);
+
+        $query->where(function ($q) use ($searchTerm) {
+            // Search participant names
+            $q->whereHas('attendee', function ($attendeeQuery) use ($searchTerm) {
+                $attendeeQuery->where('fullName', 'like', "%{$searchTerm}%");
+            })
+            // Search non-participant names
+            ->orWhere('recipientName', 'like', "%{$searchTerm}%");
+        });
+
+        $records = $query->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($record) {
+                $isParticipant = !empty($record->attendeeId);
+                $recipientName = $isParticipant 
+                    ? ($record->attendee->fullName ?? 'Unknown')
+                    : $record->recipientName;
+
+                return [
+                    'dispensingId' => $record->dispensingId,
+                    'recipientName' => $recipientName,
+                    'recipientType' => $record->recipientType ?? 'participant',
+                    'isParticipant' => $isParticipant,
+                    'attendeeId' => $record->attendeeId,
+                    'photo' => $isParticipant ? ($record->attendee->photoUrl ?? null) : null,
+                    'phoneNumber' => $isParticipant ? ($record->attendee->phoneNumber ?? null) : null,
+                    'state' => $isParticipant ? ($record->attendee->state ?? null) : null,
+                    'lga' => $isParticipant ? ($record->attendee->lga ?? null) : null,
+                    'recipientNotes' => $record->recipientNotes,
+                    'drugName' => $record->drugName,
+                    'quantityDispensed' => $record->quantityDispensed,
+                    'symptoms' => $record->symptoms,
+                    'instructions' => $record->instructions,
+                    'batchNumber' => $record->supply->batchNumber ?? 'N/A',
+                    'dispensedBy' => $record->dispenser->name ?? 'N/A',
+                    'dispensedAt' => $record->created_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+        // Group by recipient
+        $grouped = $records->groupBy('recipientName')->map(function ($items, $name) {
+            $first = $items->first();
+            return [
+                'recipientName' => $name,
+                'recipientType' => $first['recipientType'],
+                'isParticipant' => $first['isParticipant'],
+                'attendeeId' => $first['attendeeId'],
+                'photo' => $first['photo'],
+                'phoneNumber' => $first['phoneNumber'],
+                'state' => $first['state'],
+                'lga' => $first['lga'],
+                'totalDispensings' => $items->count(),
+                'history' => $items->values(),
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'results' => $grouped,
         ]);
     }
 

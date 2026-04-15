@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\EventPassController;
 use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\RiskProfileController;
+use App\Http\Controllers\Api\ExitController;
+
 use App\Http\Controllers\Api\RoomAllocationController;
 use App\Http\Controllers\Api\RoomCheckinController;
 use App\Http\Controllers\Api\MedicationController;
@@ -157,7 +159,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
 
 
-       // ==========================================
+    // ==========================================
     // MEDICATION SUPPLY MANAGEMENT (Nurse/Medical Staff)
     // ==========================================
     
@@ -193,6 +195,12 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     // Get all medication dispensing records
     Route::get('/medications/dispensing/all', [MedicationController::class, 'getAllDispensing']);
     
+    // Get all recipients with medication history (paginated)
+    Route::get('/medications/recipients', [MedicationController::class, 'getAllRecipients']);
+    
+    // Search medication history by recipient name (participants + non-participants)
+    Route::get('/medications/history/search', [MedicationController::class, 'searchRecipientHistory']);
+    
     
     // ==========================================
     // REPORTS (Medical Staff/Admin)
@@ -200,7 +208,25 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     
     // Generate medication inventory and dispensing report
     Route::get('/medications/reports', [MedicationController::class, 'generateReport']);
+
+
+        // Scan QR code to get attendee info
+    Route::post('/exits/scan', [ExitController::class, 'scanQRCode']);
     
+    // Record exit
+    Route::post('/exits/record-exit', [ExitController::class, 'recordExit']);
+    
+    // Record return
+    Route::post('/exits/record-return', [ExitController::class, 'recordReturn']);
+    
+    // Get currently out participants
+    Route::get('/exits/currently-out', [ExitController::class, 'getCurrentlyOut']);
+    
+    // Get exit history
+    Route::get('/exits/history', [ExitController::class, 'getExitHistory']);
+    
+    // Get statistics
+    Route::get('/exits/statistics', [ExitController::class, 'getStatistics']);
 
 });
 
