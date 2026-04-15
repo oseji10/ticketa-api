@@ -20,7 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-    'https://otiosely-chronological-cari.ngrok-free.dev',
+    'https://ticketa.gradelytics.com.ng',
     'http://localhost:3000', // Keep for local dev
 ],
 
