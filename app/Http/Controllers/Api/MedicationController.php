@@ -1,0 +1,667 @@
+<?php
+
+namespace App\Http\Controllers\Api;
+
+use App\Http\Controllers\Controller;
+use App\Models\MedicationSupply;
+use App\Models\MedicationDispensing;
+use App\Models\Attendee;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class MedicationController extends Controller
+{
+    /**
+     * Record new medication supply
+     */
+    public function recordSupply(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $validated = $request->validate([
+            'drugName' => ['required', 'string', 'max:255'],
+            'batchNumber' => ['required', 'string', 'max:255'],
+            'expiryDate' => ['required', 'date', 'after:today'],
+            'quantitySupplied' => ['required', 'integer', 'min:1'],
+            'supplyDate' => ['required', 'date'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $user = auth()->user();
+
+        $supply = MedicationSupply::create([
+            'eventId' => $eventId,
+            'drugName' => $validated['drugName'],
+            'batchNumber' => $validated['batchNumber'],
+            'expiryDate' => $validated['expiryDate'],
+            'quantitySupplied' => $validated['quantitySupplied'],
+            'quantityRemaining' => $validated['quantitySupplied'], // Initially all remaining
+            'supplyDate' => $validated['supplyDate'],
+            'notes' => $validated['notes'] ?? null,
+            'recordedBy' => $user->id,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Medication supply recorded successfully.',
+            'data' => $supply,
+        ]);
+    }
+
+    /**
+     * Get medication inventory
+     */
+    public function getInventory(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // Get user scoping
+        $user = auth()->user();
+        $userSubCl = $user->sub_cl ?? null;
+
+        // Check if user data is scoped
+        $isScoped = !empty($userSubCl);
+        $scopedAttendeeIds = [];
+
+        if ($isScoped) {
+            $scopedAttendeeIds = DB::table('attendees')
+                ->where('eventId', $eventId)
+                ->where('sub_cl', $userSubCl)
+                ->pluck('attendeeId')
+                ->toArray();
+        }
+
+        // Get supplies grouped by drug name
+        $supplies = MedicationSupply::where('eventId', $eventId)
+            ->orderBy('drugName')
+            ->orderBy('expiryDate')
+            ->get();
+
+        $inventory = $supplies->groupBy('drugName')->map(function ($items, $drugName) use ($isScoped, $scopedAttendeeIds) {
+            $overallTotal = $items->sum('quantitySupplied');
+            
+            // Calculate dispensed - filter by scope if needed
+            $overallDispensed = $items->sum(function ($supply) use ($isScoped, $scopedAttendeeIds) {
+                if (!$isScoped) {
+                    return $supply->quantityDispensed;
+                }
+                
+                // Only count dispensing to scoped attendees
+                return $supply->dispensings()
+                    ->whereIn('attendeeId', $scopedAttendeeIds)
+                    ->sum('quantityDispensed');
+            });
+
+            $overallRemaining = $items->sum('quantityRemaining');
+
+            // Group by batch
+            $byBatches = $items->map(function ($supply) use ($isScoped, $scopedAttendeeIds) {
+                $dispensedForBatch = $isScoped 
+                    ? $supply->dispensings()->whereIn('attendeeId', $scopedAttendeeIds)->sum('quantityDispensed')
+                    : $supply->quantityDispensed;
+
+                return [
+                    'supplyId' => $supply->supplyId,
+                    'batchNumber' => $supply->batchNumber,
+                    'expiryDate' => $supply->expiryDate->format('Y-m-d'),
+                    'quantitySupplied' => $supply->quantitySupplied,
+                    'quantityDispensed' => $dispensedForBatch,
+                    'quantityRemaining' => $supply->quantityRemaining,
+                    'isExpired' => $supply->isExpired(),
+                    'isExpiringSoon' => $supply->isExpiringSoon(),
+                ];
+            })->values();
+
+            return [
+                'drugName' => $drugName,
+                'overallTotal' => $overallTotal,
+                'overallDispensed' => $overallDispensed,
+                'overallRemaining' => $overallRemaining,
+                'byBatches' => $byBatches,
+            ];
+        })->values();
+
+        return response()->json([
+            'success' => true,
+            'inventory' => $inventory,
+            'scopedToUser' => $isScoped,
+        ]);
+    }
+
+    /**
+     * Get recent medication supplies
+     */
+    public function getRecentSupplies(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $supplies = MedicationSupply::where('eventId', $eventId)
+            ->orderBy('created_at', 'desc')
+            ->take(20)
+            ->get()
+            ->map(function ($supply) {
+                return [
+                    'supplyId' => $supply->supplyId,
+                    'drugName' => $supply->drugName,
+                    'batchNumber' => $supply->batchNumber,
+                    'expiryDate' => $supply->expiryDate->format('Y-m-d'),
+                    'quantitySupplied' => $supply->quantitySupplied,
+                    'quantityDispensed' => $supply->quantityDispensed,
+                    'quantityRemaining' => $supply->quantityRemaining,
+                    'supplyDate' => $supply->supplyDate->format('Y-m-d'),
+                    'isExpired' => $supply->isExpired(),
+                    'isExpiringSoon' => $supply->isExpiringSoon(),
+                    'createdAt' => $supply->created_at->toISOString(),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'supplies' => $supplies,
+        ]);
+    }
+
+    /**
+     * Get available medications for dispensing dropdown
+     */
+    public function getAvailableMedications(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // Get medications that are not expired and have remaining quantity
+        $medications = MedicationSupply::where('eventId', $eventId)
+            ->where('quantityRemaining', '>', 0)
+            ->where('expiryDate', '>=', now()->startOfDay())
+            ->select('drugName')
+            ->selectRaw('SUM(quantityRemaining) as totalRemaining')
+            ->selectRaw('MIN(expiryDate) as nearestExpiry')
+            ->groupBy('drugName')
+            ->orderBy('drugName')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'drugName' => $item->drugName,
+                    'totalRemaining' => $item->totalRemaining,
+                    'nearestExpiry' => $item->nearestExpiry,
+                    'isExpiringSoon' => $item->nearestExpiry <= now()->addDays(30),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'medications' => $medications,
+        ]);
+    }
+
+    /**
+     * Search for attendees/participants
+     */
+    public function searchAttendees(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $validated = $request->validate([
+            'search' => ['required', 'string', 'min:2'],
+        ]);
+
+        $searchTerm = $validated['search'];
+
+        // Get user scoping
+        $user = auth()->user();
+        $userSubCl = $user->sub_cl ?? null;
+
+        $query = Attendee::where('eventId', $eventId);
+
+        // Apply user scoping if needed
+        if (!empty($userSubCl)) {
+            $query->where('sub_cl', $userSubCl);
+        }
+
+        // Search by name or attendee ID
+        $attendees = $query->where(function ($q) use ($searchTerm) {
+            $q->where('fullName', 'like', "%{$searchTerm}%")
+              ->orWhere('attendeeId', 'like', "%{$searchTerm}%")
+              ->orWhere('phone', 'like', "%{$searchTerm}%");
+        })
+        ->orderBy('fullName')
+        ->limit(10)
+        ->get(['attendeeId', 'fullName', 'phone', 'state', 'lga']);
+
+        return response()->json([
+            'success' => true,
+            'attendees' => $attendees,
+        ]);
+    }
+
+    /**
+     * Dispense medication to participant or non-participant
+     */
+    public function dispenseMedication(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $validated = $request->validate([
+            'isParticipant' => ['required', 'boolean'],
+            'attendeeId' => ['required_if:isParticipant,true', 'nullable', 'integer', 'exists:attendees,attendeeId'],
+            'recipientName' => ['required_if:isParticipant,false', 'nullable', 'string', 'max:255'],
+            'recipientType' => ['required_if:isParticipant,false', 'nullable', 'in:staff,visitor,other'],
+            'recipientNotes' => ['nullable', 'string', 'max:500'],
+            'drugName' => ['required', 'string', 'max:255'],
+            'quantityDispensed' => ['required', 'integer', 'min:1'],
+            'symptoms' => ['nullable', 'string', 'max:1000'],
+            'instructions' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        // Verify attendee if participant
+        if ($validated['isParticipant']) {
+            $attendee = Attendee::where('attendeeId', $validated['attendeeId'])
+                ->where('eventId', $eventId)
+                ->first();
+
+            if (!$attendee) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Attendee not found in active event.',
+                ], 404);
+            }
+        }
+
+        // Find available supply (not expired, has remaining quantity)
+        // Use FIFO - oldest expiry first
+        $supply = MedicationSupply::where('eventId', $eventId)
+            ->where('drugName', $validated['drugName'])
+            ->where('quantityRemaining', '>=', $validated['quantityDispensed'])
+            ->where('expiryDate', '>=', now()->startOfDay())
+            ->orderBy('expiryDate', 'asc')
+            ->first();
+
+        if (!$supply) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Insufficient medication in inventory or all batches expired.',
+            ], 422);
+        }
+
+        $user = auth()->user();
+
+        // Create dispensing record
+        $dispensing = MedicationDispensing::create([
+            'eventId' => $eventId,
+            'attendeeId' => $validated['isParticipant'] ? $validated['attendeeId'] : null,
+            'supplyId' => $supply->supplyId,
+            'drugName' => $validated['drugName'],
+            'quantityDispensed' => $validated['quantityDispensed'],
+            'recipientName' => !$validated['isParticipant'] ? $validated['recipientName'] : null,
+            'recipientType' => !$validated['isParticipant'] ? $validated['recipientType'] : 'participant',
+            'recipientNotes' => $validated['recipientNotes'] ?? null,
+            'symptoms' => $validated['symptoms'] ?? null,
+            'instructions' => $validated['instructions'] ?? null,
+            'dispensedBy' => $user->id,
+            'deviceName' => $request->header('User-Agent'),
+        ]);
+
+        // Update supply quantities
+        $supply->decrement('quantityRemaining', $validated['quantityDispensed']);
+        $supply->increment('quantityDispensed', $validated['quantityDispensed']);
+
+        $responseData = [
+            'dispensing' => $dispensing,
+            'batchNumber' => $supply->batchNumber,
+            'remainingInBatch' => $supply->quantityRemaining,
+        ];
+
+        if ($validated['isParticipant']) {
+            $responseData['attendee'] = $attendee->only(['attendeeId', 'fullName']);
+        } else {
+            $responseData['recipient'] = [
+                'name' => $validated['recipientName'],
+                'type' => $validated['recipientType'],
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Medication dispensed successfully.',
+            'data' => $responseData,
+        ]);
+    }
+
+    /**
+     * Get attendee's medication history
+     */
+    public function getAttendeeHistory(Request $request, int $attendeeId): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $attendee = Attendee::where('attendeeId', $attendeeId)
+            ->where('eventId', $eventId)
+            ->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attendee not found.',
+            ], 404);
+        }
+
+        $history = MedicationDispensing::where('eventId', $eventId)
+            ->where('attendeeId', $attendeeId)
+            ->with(['supply', 'dispenser'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($record) {
+                return [
+                    'dispensingId' => $record->dispensingId,
+                    'drugName' => $record->drugName,
+                    'quantityDispensed' => $record->quantityDispensed,
+                    'symptoms' => $record->symptoms,
+                    'instructions' => $record->instructions,
+                    'batchNumber' => $record->supply->batchNumber ?? 'N/A',
+                    'dispensedBy' => $record->dispenser->name ?? 'N/A',
+                    'dispensedAt' => $record->created_at->format('Y-m-d H:i:s'),
+                    'recipientType' => $record->recipientType ?? 'participant',
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'attendee' => $attendee->only(['attendeeId', 'fullName', 'phoneNumber']),
+            'history' => $history,
+        ]);
+    }
+
+    /**
+     * Get all medication dispensing records (for reports)
+     */
+    public function getAllDispensing(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        $dispensingRecords = MedicationDispensing::where('eventId', $eventId)
+            ->with(['attendee', 'supply', 'dispenser'])
+            ->orderBy('created_at', 'desc')
+            ->take(50)
+            ->get()
+            ->map(function ($record) {
+                $recipientName = $record->attendeeId 
+                    ? ($record->attendee->fullName ?? 'Unknown Participant')
+                    : $record->recipientName;
+
+                return [
+                    'dispensingId' => $record->dispensingId,
+                    'recipientName' => $recipientName,
+                    'recipientType' => $record->recipientType ?? 'participant',
+                    'drugName' => $record->drugName,
+                    'quantityDispensed' => $record->quantityDispensed,
+                    'symptoms' => $record->symptoms,
+                    'batchNumber' => $record->supply->batchNumber ?? 'N/A',
+                    'dispensedBy' => $record->dispenser->name ?? 'N/A',
+                    'dispensedAt' => $record->created_at->format('Y-m-d H:i:s'),
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'records' => $dispensingRecords,
+        ]);
+    }
+
+    /**
+     * Generate medication report
+     */
+    public function generateReport(Request $request): JsonResponse
+    {
+        // Get active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // Get user scoping
+        $user = auth()->user();
+        $userSubCl = $user->sub_cl ?? null;
+        $isScoped = !empty($userSubCl);
+        $scopedAttendeeIds = [];
+
+        if ($isScoped) {
+            $scopedAttendeeIds = DB::table('attendees')
+                ->where('eventId', $eventId)
+                ->where('sub_cl', $userSubCl)
+                ->pluck('attendeeId')
+                ->toArray();
+        }
+
+        // Inventory summary
+        $inventorySummary = MedicationSupply::where('eventId', $eventId)
+            ->selectRaw('
+                COUNT(DISTINCT drugName) as total_drugs,
+                SUM(quantitySupplied) as total_supplied,
+                SUM(quantityDispensed) as total_dispensed,
+                SUM(quantityRemaining) as total_remaining
+            ')
+            ->first();
+
+        // Dispensing summary
+        $dispensingQuery = MedicationDispensing::where('eventId', $eventId);
+        
+        if ($isScoped) {
+            $dispensingQuery->whereIn('attendeeId', $scopedAttendeeIds);
+        }
+
+        $dispensingSummary = [
+            'totalDispensings' => $dispensingQuery->count(),
+            'uniqueParticipants' => $dispensingQuery->distinct('attendeeId')->count('attendeeId'),
+            'byDrug' => $dispensingQuery
+                ->selectRaw('drugName, COUNT(*) as count, SUM(quantityDispensed) as total_quantity')
+                ->groupBy('drugName')
+                ->orderByDesc('count')
+                ->get(),
+        ];
+
+        // Top medications
+        $topMedications = MedicationDispensing::where('eventId', $eventId)
+            ->when($isScoped, function ($q) use ($scopedAttendeeIds) {
+                $q->whereIn('attendeeId', $scopedAttendeeIds);
+            })
+            ->selectRaw('drugName, COUNT(*) as dispensing_count, SUM(quantityDispensed) as total_quantity')
+            ->groupBy('drugName')
+            ->orderByDesc('dispensing_count')
+            ->take(10)
+            ->get();
+
+        // Expiring medications
+        $expiringMedications = MedicationSupply::where('eventId', $eventId)
+            ->where('quantityRemaining', '>', 0)
+            ->where('expiryDate', '<=', now()->addDays(30))
+            ->where('expiryDate', '>=', now())
+            ->orderBy('expiryDate')
+            ->get(['drugName', 'batchNumber', 'expiryDate', 'quantityRemaining']);
+
+        // Expired medications
+        $expiredMedications = MedicationSupply::where('eventId', $eventId)
+            ->where('quantityRemaining', '>', 0)
+            ->where('expiryDate', '<', now())
+            ->orderBy('expiryDate')
+            ->get(['drugName', 'batchNumber', 'expiryDate', 'quantityRemaining']);
+
+        return response()->json([
+            'success' => true,
+            'report' => [
+                'eventId' => $eventId,
+                'generatedAt' => now()->toISOString(),
+                'scopedToUser' => $isScoped,
+                'inventory' => $inventorySummary,
+                'dispensing' => $dispensingSummary,
+                'topMedications' => $topMedications,
+                'expiringMedications' => $expiringMedications,
+                'expiredMedications' => $expiredMedications,
+            ],
+        ]);
+    }
+
+    /**
+     * Top up existing medication supply
+     */
+    public function topUpSupply(Request $request, int $supplyId): JsonResponse
+    {
+        $validated = $request->validate([
+            'additionalQuantity' => ['required', 'integer', 'min:1'],
+        ]);
+
+        $supply = MedicationSupply::findOrFail($supplyId);
+
+        // Verify belongs to active event
+        $activeEvent = DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        if ($supply->eventId !== $eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Supply not found in active event.',
+            ], 404);
+        }
+
+        // Check if expired
+        if ($supply->isExpired()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot top up expired medication.',
+            ], 422);
+        }
+
+        // Update quantities
+        $supply->increment('quantitySupplied', $validated['additionalQuantity']);
+        $supply->increment('quantityRemaining', $validated['additionalQuantity']);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Added {$validated['additionalQuantity']} units to {$supply->drugName} (Batch: {$supply->batchNumber})",
+            'data' => $supply->fresh(),
+        ]);
+    }
+}

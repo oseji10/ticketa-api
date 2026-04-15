@@ -31,6 +31,14 @@ class Event extends Model
         return $this->hasMany(MealSession::class, 'eventId', 'eventId');
     }
 
+//     public function mealSessions()
+// {
+//     return $this->hasMany(MealSession::class, 'eventId', 'eventId')
+//         ->whereHas('event', function ($query) {
+//             $query->where('status', 'active');
+//         });
+// }
+
     public function passes()
     {
         return $this->hasMany(EventPass::class, 'eventId', 'eventId');

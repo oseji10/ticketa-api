@@ -38,8 +38,17 @@ class DailyAttendanceService
             ];
         }
 
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
         $pass = EventPass::with('attendee')
-            ->where('eventId', $event->eventId)
+            ->where('eventId', $activeEvent->eventId)
             ->where(function ($query) use ($token) {
                 $query->where('passCode', $token)
                     ->orWhere('serialNumber', $token);

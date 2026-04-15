@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Models\Event;
 
 class IssamCentralDashboardController extends Controller
 {
@@ -34,12 +35,28 @@ class IssamCentralDashboardController extends Controller
         $category = $validated['category'] ?? null;
         $supervisorId = $validated['supervisorId'] ?? null;
 
+        // ── Scoped user filter ────────────────────────────────────────────────
+        // Look up the logged-in user's record in sub_cls via userId.
+        // If found, restrict all attendee-linked stats to attendees sharing
+        // that subClId. If no sub_cls record exists, show all data.
+        $subCl = DB::table('sub_cls')
+            ->where('userId', auth()->id())
+            ->first();
+
+        $isScoped = !is_null($subCl);
+        $scopedAttendeeIds = $isScoped
+            ? DB::table('attendees')
+                ->where('subClId', $subCl->subClId)
+                ->where('isRegistered', 1)
+                ->pluck('attendeeId')
+            : collect();
+
         try {
             return match ($type) {
-                'overview' => $this->handleOverviewDetail($date, $title),
-                'room-metric' => $this->handleRoomMetricDetail($date, $metric),
+                'overview' => $this->handleOverviewDetail($date, $title, $isScoped, $scopedAttendeeIds),
+                'room-metric' => $this->handleRoomMetricDetail($date, $metric, $isScoped, $scopedAttendeeIds),
                 'incident' => $this->handleIncidentDetail($date, $category),
-                'supervisor' => $this->handleSupervisorDetail($date, $supervisorId),
+                'supervisor' => $this->handleSupervisorDetail($date, $supervisorId, $isScoped, $scopedAttendeeIds),
                 default => response()->json([
                     'message' => 'Unsupported detail type supplied.',
                 ], 422),
@@ -53,43 +70,43 @@ class IssamCentralDashboardController extends Controller
         }
     }
 
-  protected function handleOverviewDetail(string $date, ?string $title): JsonResponse
+  protected function handleOverviewDetail(string $date, ?string $title, bool $isScoped, $scopedAttendeeIds): JsonResponse
 {
     $normalized = strtolower(trim((string) $title));
 
     return match ($normalized) {
         // ── Accredited / total ──────────────────────────────────────
         'total participants',
-        'total accredited participants' => $this->totalParticipantsDetail($date),
+        'total accredited participants' => $this->totalParticipantsDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Accredited by gender ────────────────────────────────────
-        'accredited male'   => $this->accreditedByGenderDetail($date, 'male'),
-        'accredited female' => $this->accreditedByGenderDetail($date, 'female'),
+        'accredited male'   => $this->accreditedByGenderDetail($date, 'male', $isScoped, $scopedAttendeeIds),
+        'accredited female' => $this->accreditedByGenderDetail($date, 'female', $isScoped, $scopedAttendeeIds),
 
         // ── Present ─────────────────────────────────────────────────
         'present today',
         'present for date',
         'present participants',
-        'total present for selected date' => $this->presentParticipantsDetail($date),
+        'total present for selected date' => $this->presentParticipantsDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Absent ──────────────────────────────────────────────────
         'absent today',
         'absent for date',
         'absent participants',
-        'total absent for selected date' => $this->absentParticipantsDetail($date),
+        'total absent for selected date' => $this->absentParticipantsDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Attendance % ─────────────────────────────────────────────
         'attendance %',
         'attendance percentage',
-        'attendance for date' => $this->attendancePercentageDetail($date),
+        'attendance for date' => $this->attendancePercentageDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Present by gender ────────────────────────────────────────
-        'males present' => $this->presentByGenderDetail($date, 'male'),
-        'females present' => $this->presentByGenderDetail($date, 'female'),
+        'males present' => $this->presentByGenderDetail($date, 'male', $isScoped, $scopedAttendeeIds),
+        'females present' => $this->presentByGenderDetail($date, 'female', $isScoped, $scopedAttendeeIds),
 
         // ── Late ─────────────────────────────────────────────────────
         'late arrivals',
-        'late arrivals for date' => $this->lateArrivalsDetail($date),
+        'late arrivals for date' => $this->lateArrivalsDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Incidents ────────────────────────────────────────────────
         'incidents today',
@@ -100,15 +117,15 @@ class IssamCentralDashboardController extends Controller
 
         // ── Rooms ────────────────────────────────────────────────────
         'rooms checked',
-        'rooms checked for date' => $this->roomsCheckedDetail($date),
+        'rooms checked for date' => $this->roomsCheckedDetail($date, $isScoped, $scopedAttendeeIds),
 
         // ── Meals ────────────────────────────────────────────────────
         'meals served',
-        'meals served for date' => $this->mealsServedDetail($date),
+        'meals served for date' => $this->mealsServedDetail($date, $isScoped, $scopedAttendeeIds),
 
         'meals (unique)',
         'unique meals served',
-        'meals unique' => $this->uniqueMealsServedDetail($date),
+        'meals unique' => $this->uniqueMealsServedDetail($date, $isScoped, $scopedAttendeeIds),
 
         default => response()->json([
             'message' => "No detail handler configured for overview title: {$title}",
@@ -118,8 +135,18 @@ class IssamCentralDashboardController extends Controller
 
 
 
-protected function accreditedByGenderDetail(string $date, string $gender): JsonResponse
+protected function accreditedByGenderDetail(string $date, string $gender, bool $isScoped, $scopedAttendeeIds): JsonResponse
 {
+    $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+    
+    $eventId = $activeEvent->eventId ?? $activeEvent->id;
     $rows = DB::table('attendees as a')
         ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
         ->select(
@@ -131,7 +158,9 @@ protected function accreditedByGenderDetail(string $date, string $gender): JsonR
             'a.photoUrl'
         )
         ->where('a.isRegistered', 1)
+        ->where('a.eventId', $eventId)
         ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
+        ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
         ->orderBy('a.fullName')
         ->get();
 
@@ -153,7 +182,7 @@ protected function accreditedByGenderDetail(string $date, string $gender): JsonR
     ]);
 }
 
-protected function presentByGenderDetail(string $date, string $gender): JsonResponse
+protected function presentByGenderDetail(string $date, string $gender, bool $isScoped, $scopedAttendeeIds): JsonResponse
 {
     $rows = DB::table('daily_attendances as da')
         ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
@@ -170,6 +199,7 @@ protected function presentByGenderDetail(string $date, string $gender): JsonResp
         ->whereDate('da.attendanceDate', $date)
         ->where('a.isRegistered', 1)
         ->whereRaw("TRIM(LOWER(a.gender)) IN (?, ?)", [$gender, substr($gender, 0, 1)])
+        ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
         ->orderBy('a.fullName')
         ->get()
         ->map(fn($r) => [
@@ -206,10 +236,24 @@ public function attendanceTrend(Request $request): JsonResponse
     $periodStart = Carbon::parse($request->query('periodStart', '2026-03-24'))->toDateString();
     $periodEnd   = Carbon::parse($request->query('periodEnd',   '2026-03-30'))->toDateString();
 
+    // ── Scoped user filter ────────────────────────────────────────────────
+    $subCl = DB::table('sub_cls')
+        ->where('userId', auth()->id())
+        ->first();
+
+    $isScoped = !is_null($subCl);
+    $scopedAttendeeIds = $isScoped
+        ? DB::table('attendees')
+            ->where('subClId', $subCl->subClId)
+            ->where('isRegistered', 1)
+            ->pluck('attendeeId')
+        : collect();
+
     $rows = DB::table('daily_attendances as da')
         ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
         ->where('a.isRegistered', 1)
         ->whereBetween(DB::raw('DATE(da.attendanceDate)'), [$periodStart, $periodEnd])
+        ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
         ->select(
             DB::raw('DATE(da.attendanceDate) as date'),
             DB::raw('COUNT(DISTINCT da.attendeeId) as present')
@@ -218,7 +262,10 @@ public function attendanceTrend(Request $request): JsonResponse
         ->orderBy('date')
         ->get();
 
-    $total = DB::table('attendees')->where('isRegistered', 1)->count();
+    $total = DB::table('attendees')
+        ->where('isRegistered', 1)
+        ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+        ->count();
 
     $trend = $rows->map(fn($r) => [
         'date'    => Carbon::parse($r->date)->format('d M'),
@@ -230,28 +277,28 @@ public function attendanceTrend(Request $request): JsonResponse
 }
 
 
-    protected function handleRoomMetricDetail(string $date, ?string $metric): JsonResponse
+    protected function handleRoomMetricDetail(string $date, ?string $metric, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $normalized = strtolower(trim((string) $metric));
 
         if (str_contains($normalized, 'assigned')) {
-            return $this->roomAssignedDetail($date);
+            return $this->roomAssignedDetail($date, $isScoped, $scopedAttendeeIds);
         }
 
         if (str_contains($normalized, 'checked')) {
-            return $this->roomsCheckedDetail($date);
+            return $this->roomsCheckedDetail($date, $isScoped, $scopedAttendeeIds);
         }
 
         if (str_contains($normalized, 'ack')) {
-            return $this->roomAcknowledgementDetail($date);
+            return $this->roomAcknowledgementDetail($date, $isScoped, $scopedAttendeeIds);
         }
 
         if (str_contains($normalized, 'key')) {
-            return $this->roomKeyIssuedDetail($date);
+            return $this->roomKeyIssuedDetail($date, $isScoped, $scopedAttendeeIds);
         }
 
         if (str_contains($normalized, 'issue') || str_contains($normalized, 'flag')) {
-            return $this->roomIssuesDetail($date);
+            return $this->roomIssuesDetail($date, $isScoped, $scopedAttendeeIds);
         }
 
         return response()->json([
@@ -261,6 +308,7 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function handleIncidentDetail(string $date, ?string $category): JsonResponse
     {
+        // Incidents are not attendee-linked — always event-wide
         $rows = DB::table('incidents as ir')
             ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ir.attendeeId')
             ->leftJoin('users as u', 'u.id', '=', 'ir.reportedBy')
@@ -310,7 +358,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function handleSupervisorDetail(string $date, ?int $supervisorId): JsonResponse
+    protected function handleSupervisorDetail(string $date, ?int $supervisorId, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $rows = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
@@ -325,6 +373,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->whereDate('da.attendanceDate', $date)
             ->when($supervisorId, fn ($q) => $q->where('u.id', $supervisorId))
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('da.attendanceId')
             ->get()
             ->map(fn ($row) => [
@@ -355,7 +404,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function totalParticipantsDetail(string $date): JsonResponse
+    protected function totalParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $rows = DB::table('attendees as a')
         ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
@@ -368,6 +417,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'a.photoUrl'
             )
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->orderBy('a.fullName')
             ->get();
 
@@ -389,7 +439,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function presentParticipantsDetail(string $date): JsonResponse
+    protected function presentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $rows = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
@@ -409,6 +459,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->whereDate('da.attendanceDate', $date)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->orderBy('a.fullName')
             ->get()
             // ->unique('attendeeId')
@@ -446,10 +497,11 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function absentParticipantsDetail(string $date): JsonResponse
+    protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $presentIds = DB::table('daily_attendances')
             ->whereDate('attendanceDate', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->pluck('attendeeId')
             ->unique()
             ->filter()
@@ -468,6 +520,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
             ->where('isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->orderBy('fullName')
             ->get();
 
@@ -489,12 +542,16 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function attendancePercentageDetail(string $date): JsonResponse
+    protected function attendancePercentageDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
-        $totalParticipants = DB::table('attendees')->where('isRegistered', 1)->count();
+        $totalParticipants = DB::table('attendees')
+            ->where('isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+            ->count();
 
         $presentCount = DB::table('daily_attendances')
             ->whereDate('attendanceDate', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->distinct('attendeeId')
             ->count('attendeeId');
 
@@ -515,7 +572,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function lateArrivalsDetail(string $date): JsonResponse
+    protected function lateArrivalsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes daily_attendances has attendanceTime column
         // Change this threshold as needed
@@ -535,6 +592,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->whereDate('da.attendanceDate', $date)
             ->whereTime('da.attendanceTime', '>', $cutoff)
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->orderBy('da.attendanceTime')
             ->get();
 
@@ -559,6 +617,7 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function incidentsTodayDetail(string $date): JsonResponse
     {
+        // Incidents are not attendee-linked — always event-wide
         $rows = DB::table('incidents as ir')
             ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ir.attendeeId')
             ->select(
@@ -595,6 +654,7 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function openIncidentsDetail(string $date): JsonResponse
     {
+        // Incidents are not attendee-linked — always event-wide
         $rows = DB::table('incidents as ir')
             ->leftJoin('attendees as a', 'a.attendeeId', '=', 'ir.attendeeId')
             ->select(
@@ -630,7 +690,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function roomsCheckedDetail(string $date): JsonResponse
+    protected function roomsCheckedDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes room_allocations has checkedInAt or roomCheckedAt
         $rows = DB::table('room_allocations as ra')
@@ -647,6 +707,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ra.created_at'
             )
             ->whereDate('ra.created_at', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('ra.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('ra.allocationId')
             ->get()
             ->map(fn ($row) => [
@@ -677,7 +738,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function roomAssignedDetail(string $date): JsonResponse
+    protected function roomAssignedDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $rows = DB::table('room_allocations as ra')
             ->join('attendees as a', 'a.attendeeId', '=', 'ra.attendeeId')
@@ -692,6 +753,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ra.created_at'
             )
             // ->whereDate('ra.created_at', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('ra.attendeeId', $scopedAttendeeIds))
             ->orderBy('a.fullName')
             ->get()
             ->map(fn ($row) => [
@@ -722,7 +784,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function roomAcknowledgementDetail(string $date): JsonResponse
+    protected function roomAcknowledgementDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes room_allocations has acknowledgedAt or acknowledgement flag
         $rows = DB::table('room_allocations as ra')
@@ -737,6 +799,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->whereNotNull('ra.acknowledgedAt')
             ->whereDate('ra.acknowledgedAt', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('ra.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('ra.roomAllocationId')
             ->get();
 
@@ -757,7 +820,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function roomKeyIssuedDetail(string $date): JsonResponse
+    protected function roomKeyIssuedDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes room_allocations has keyIssuedAt or keyIssued flag
         $rows = DB::table('room_allocations as ra')
@@ -772,6 +835,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->whereNotNull('ra.keyIssuedAt')
             ->whereDate('ra.keyIssuedAt', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('ra.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('ra.roomAllocationId')
             ->get();
 
@@ -792,7 +856,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function roomIssuesDetail(string $date): JsonResponse
+    protected function roomIssuesDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes room_issues table exists
         $rows = DB::table('room_issues as ri')
@@ -808,6 +872,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'ri.created_at'
             )
             ->whereDate('ri.created_at', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('ri.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('ri.roomIssueId')
             ->get();
 
@@ -830,7 +895,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function mealsServedDetail(string $date): JsonResponse
+    protected function mealsServedDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         // Assumes meal_redemptions table exists
         $rows = DB::table('meal_redemptions as mr')
@@ -845,6 +910,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'mr.redeemedAt'
             )
             ->whereDate('mr.redeemedAt', $date)
+            ->when($isScoped, fn ($q) => $q->whereIn('mr.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('mr.redemptionId')
             ->get();
 
@@ -866,7 +932,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-protected function genderSplitDetail(string $date): JsonResponse
+protected function genderSplitDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
 {
     $rows = DB::table('daily_attendances as da')
         ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
@@ -882,6 +948,7 @@ protected function genderSplitDetail(string $date): JsonResponse
         )
         ->whereDate('da.attendanceDate', $date)
         ->where('a.isRegistered', 1)
+        ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
         ->groupBy('gender')
         ->orderBy('gender')
         ->get();
@@ -903,7 +970,7 @@ protected function genderSplitDetail(string $date): JsonResponse
     ]);
 }
 
-    protected function uniqueMealsServedDetail(string $date): JsonResponse
+    protected function uniqueMealsServedDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $rows = DB::table('meal_redemptions as mr')
         ->join('event_passes as ep', 'ep.passId', '=', 'mr.passId')
@@ -916,6 +983,7 @@ protected function genderSplitDetail(string $date): JsonResponse
             )
             ->whereDate('mr.redeemedAt', $date)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('ep.attendeeId', $scopedAttendeeIds))
             ->groupBy('a.attendeeId', 'a.fullName', 'a.phone')
             ->orderByDesc('mealCount')
             ->get();

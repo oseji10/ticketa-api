@@ -13,6 +13,7 @@ class RoomAllocation extends Model
         'attendeeId',
         'roomId',
         'roomNumber',
+        'hotel',
         'allocationType',
         'status',
         'reason',

@@ -36,4 +36,44 @@ class MealSession extends Model
     {
         return $this->hasMany(ScanLog::class, 'mealSessionId', 'mealSessionId');
     }
+
+    public function foodSupplies(): HasMany
+{
+    return $this->hasMany(FoodSupply::class, 'mealSessionId', 'mealSessionId');
+}
+
+public function foodDistributions(): HasMany
+{
+    return $this->hasMany(FoodDistribution::class, 'mealSessionId', 'mealSessionId');
+}
+
+public function ratings(): HasMany
+{
+    return $this->hasMany(MealRating::class, 'mealSessionId', 'mealSessionId');
+}
+
+
+
+
+
+// Helper to get inventory summary
+public function getInventorySummary(): array
+{
+    $supplies = $this->foodSupplies;
+    
+    return [
+        'totalSupplied' => $supplies->sum('quantitySupplied'),
+        'totalDistributed' => $supplies->sum('quantityDistributed'),
+        'totalRemaining' => $supplies->sum('quantityRemaining'),
+    ];
+}
+
+// Helper to get average rating
+public function getAverageRating(): ?float
+{
+    $avg = $this->ratings()->avg('rating');
+    return $avg ? round($avg, 2) : null;
+}
+
+
 }

@@ -30,6 +30,15 @@ class RoomCheckinController extends Controller
     }
 public function scanLookup(Request $request, Event $event): JsonResponse
 {
+    $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+
     $this->ensureSupervisorAccess();
 
     $validated = $request->validate([
@@ -47,7 +56,7 @@ public function scanLookup(Request $request, Event $event): JsonResponse
         ], 404);
     }
 
-    $attendee = Attendee::where('eventId', $event->eventId)
+    $attendee = Attendee::where('eventId', $activeEvent->eventId)
         ->where('attendeeId', $eventPass->attendeeId)
         ->first();
 
@@ -98,6 +107,15 @@ public function scanLookup(Request $request, Event $event): JsonResponse
 
 public function checkin(Request $request, Event $event): JsonResponse
     {
+        $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+    $eventId = $activeEvent->eventId;
         $this->ensureSupervisorAccess();
 
         $validated = $request->validate([
@@ -106,18 +124,27 @@ public function checkin(Request $request, Event $event): JsonResponse
             'roomNumber' => ['required', 'string', 'max:255'],
         ]);
 
-        return DB::transaction(function () use ($validated, $event) {
+        return DB::transaction(function () use ($validated) {
             $attendee = Attendee::lockForUpdate()
                 ->where('attendeeId', $validated['attendeeId'])
                 ->firstOrFail();
 
-            if ((int) $attendee->eventId !== (int) $event->eventId) {
+                 $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+                $eventId = $activeEvent->eventId;
+            if ((int) $attendee->eventId !== (int) $eventId) {
                 throw ValidationException::withMessages([
                     'attendeeId' => ['Attendee does not belong to this event.'],
                 ]);
             }
 
-            $existing = RoomAllocation::where('eventId', $event->eventId)
+            $existing = RoomAllocation::where('eventId', $eventId)
                 ->where('attendeeId', $attendee->attendeeId)
                 ->where('status', 'active')
                 ->lockForUpdate()
@@ -152,7 +179,7 @@ public function checkin(Request $request, Event $event): JsonResponse
             }
 
             $allocation = RoomAllocation::create([
-                'eventId' => $event->eventId,
+                'eventId' => $activeEvent->eventId,
                 'attendeeId' => $attendee->attendeeId,
                 'hotel' => $hotel,
                 'roomNumber' => $roomNumber,

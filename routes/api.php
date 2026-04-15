@@ -15,7 +15,7 @@ use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\RiskProfileController;
 use App\Http\Controllers\Api\RoomAllocationController;
 use App\Http\Controllers\Api\RoomCheckinController;
-use App\Http\Controllers\Api\ScreeningVisitController;
+use App\Http\Controllers\Api\MedicationController;
 use App\Http\Controllers\Api\TicketQrController;
 use App\Http\Controllers\ScannerController as ControllersScannerController;
 use Illuminate\Support\Facades\Route;
@@ -59,6 +59,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
     Route::apiResource('events', EventController::class);
 
+    Route::get('/events/meal-sessions/all', [MealSessionController::class, 'getMealSessions']);
     Route::get('/events/{event}/meal-sessions', [MealSessionController::class, 'index']);
     Route::post('/events/{event}/meal-sessions', [MealSessionController::class, 'store']);
     Route::get('/meal-sessions/{mealSession}', [MealSessionController::class, 'show']);
@@ -126,9 +127,81 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
 
 
 
-// Route::get('/dashboard/issam-central', [IssamCentralDashboardController::class, 'index']);
-Route::get('/dashboard/issam-central/detail', [IssamCentralDashboardController::class, 'detail']);
-Route::get('dashboard/issam-central/attendance-trend', [IssamCentralDashboardController::class, 'attendanceTrend']);
+    // Route::get('/dashboard/issam-central', [IssamCentralDashboardController::class, 'index']);
+    Route::get('/dashboard/issam-central/detail', [IssamCentralDashboardController::class, 'detail']);
+    Route::get('dashboard/issam-central/attendance-trend', [IssamCentralDashboardController::class, 'attendanceTrend']);
+
+       // ==========================================
+    // FOOD SUPPLY MANAGEMENT (Admin/Food Committee)
+    // ==========================================
+    
+    // Record new food supply from vendor
+    Route::post('/food/supplies', [MealController::class, 'recordSupply']);
+    
+    // Top up existing food supply
+    Route::post('/food/supplies/{supplyId}/topup', [MealController::class, 'topUpSupply']);
+    
+    // Get current food inventory (supports eventId or mealSessionId filter)
+    Route::get('/food/inventory', [MealController::class, 'getInventory']);
+    
+    // Get recent food supplies
+    Route::get('/food/supplies/recent', [MealController::class, 'getRecentSupplies']);
+
+        // ==========================================
+    // REPORTS (Admin/Food Committee)
+    // ==========================================
+    
+    // Generate daily distribution and rating report
+      Route::get('/food/reports/daily', [MealController::class, 'generateDailyReport']);
+
+
+
+
+       // ==========================================
+    // MEDICATION SUPPLY MANAGEMENT (Nurse/Medical Staff)
+    // ==========================================
+    
+    // Record new medication supply
+    Route::post('/medications/supplies', [MedicationController::class, 'recordSupply']);
+    
+    // Top up existing medication supply
+    Route::post('/medications/supplies/{supplyId}/topup', [MedicationController::class, 'topUpSupply']);
+    
+    // Get current medication inventory
+    Route::get('/medications/inventory', [MedicationController::class, 'getInventory']);
+    
+    // Get recent medication supplies
+    Route::get('/medications/supplies/recent', [MedicationController::class, 'getRecentSupplies']);
+    
+    
+    // ==========================================
+    // MEDICATION DISPENSING (Nurse/Medical Staff)
+    // ==========================================
+    
+    // Get available medications for dispensing dropdown
+    Route::get('/medications/available', [MedicationController::class, 'getAvailableMedications']);
+    
+    // Search for attendees/participants by name or ID
+    Route::get('/medications/attendees/search', [MedicationController::class, 'searchAttendees']);
+    
+    // Dispense medication to participant
+    Route::post('/medications/dispense', [MedicationController::class, 'dispenseMedication']);
+    
+    // Get attendee's medication history
+    Route::get('/medications/attendees/{attendeeId}/history', [MedicationController::class, 'getAttendeeHistory']);
+    
+    // Get all medication dispensing records
+    Route::get('/medications/dispensing/all', [MedicationController::class, 'getAllDispensing']);
+    
+    
+    // ==========================================
+    // REPORTS (Medical Staff/Admin)
+    // ==========================================
+    
+    // Generate medication inventory and dispensing report
+    Route::get('/medications/reports', [MedicationController::class, 'generateReport']);
+    
+
 });
 
 // Route::get('/staff', [StaffController::class, 'index']);
@@ -137,3 +210,19 @@ Route::get('/feedback/download-pdf', [FeedbackController::class, 'downloadPdf'])
     Route::get('/staff', [StaffController::class, 'index']);
     // Route::post('/feedback', [FeedbackController::class, 'store']);
     Route::get('/feedback', [FeedbackController::class, 'summary']);
+
+
+    // ==========================================
+    // MEAL RATINGS (Participants)
+    // ==========================================
+    
+    // Get meal sessions available for rating by current user
+    Route::get('/meals/sessions/rateable', [MealController::class, 'getRateableMeals']);
+    
+    // Submit a rating for a meal session
+    Route::post('/meals/ratings', [MealController::class, 'submitRating']);
+    
+    // Get current user's rating history
+    Route::get('/meals/ratings/my-ratings', [MealController::class, 'getMyRatings']);
+    
+    

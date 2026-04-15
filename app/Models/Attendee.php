@@ -33,6 +33,8 @@ class Attendee extends Model
         'photoUrl',
         'accommodation',
         'color',
+        'colorId',
+        'subClId',
 
         // REGISTRATION FIELDS
         'isRegistered',
@@ -88,4 +90,15 @@ public function incidents()
 {
     return $this->hasMany(Incident::class, 'attendeeId', 'attendeeId');
 }
+
+public function group_color()
+{
+    return $this->belongsTo(Color::class, 'colorId', 'colorId');
+}
+
+public function subCommunityLead()
+{
+    return $this->belongsTo(SubCL::class, 'subClId');
+}
+
 }

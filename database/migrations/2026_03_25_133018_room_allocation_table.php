@@ -23,7 +23,8 @@ return new class extends Migration
             $table->unsignedBigInteger('allocatedBy')->nullable();
 
             $table->unsignedBigInteger('previousAllocationId')->nullable();
-
+            $table->string('hotel')->nullable();
+            $table->string('roomNumber')->nullable();
             $table->timestamps();
 
             $table->foreign('eventId')->references('eventId')->on('events')->cascadeOnDelete();

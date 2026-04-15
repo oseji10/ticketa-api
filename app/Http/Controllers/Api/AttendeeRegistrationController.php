@@ -9,6 +9,7 @@ use App\Models\EventPass;
 use App\Services\AttendeeRegistrationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 
@@ -21,25 +22,61 @@ class AttendeeRegistrationController extends Controller
     }
 
     /**
+     * Get scoped attendee IDs for the logged-in user
+     */
+    protected function getScopedAttendeeIds(): array
+    {
+        $subCl = DB::table('sub_cls')
+            ->where('userId', auth()->id())
+            ->first();
+
+        if (!$subCl) {
+            return ['isScoped' => false, 'attendeeIds' => collect()];
+        }
+
+        $attendeeIds = DB::table('attendees')
+            ->where('subClId', $subCl->subClId)
+            ->where('isRegistered', 1)
+            ->pluck('attendeeId');
+
+        return ['isScoped' => true, 'attendeeIds' => $attendeeIds];
+    }
+
+    /**
      * Search attendee by phone or unique ID
      */
     public function search(Request $request, Event $event): JsonResponse
     {
         $validated = $request->validate([
-    'q' => ['required', 'string'],
-    'eventId' => ['required', 'integer'],
-]);
+            'q' => ['required', 'string'],
+        ]);
 
-$query = $validated['q'];
-$eventId = $validated['eventId'];
+        $query = $validated['q'];
+
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+        
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
 
         $attendee = Attendee::with('pass')
-            // ->where('eventId', $eventId)
+            ->where('eventId', $eventId)
             ->where(function ($q) use ($query) {
                 $q->where('phone', $query)
                   ->orWhere('uniqueId', $query)
                   ->orWhere('uniqueId', 'LIKE', "%{$query}"); 
             })
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->first();
 
         if (!$attendee) {
@@ -64,12 +101,30 @@ $eventId = $validated['eventId'];
      */
     public function verifyPass(Request $request, Event $event): JsonResponse
     {
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+        
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
         $validated = $request->validate([
             'serialNumber' => ['required', 'string', 'max:100'],
         ]);
 
-        $pass = EventPass::with('attendee')
-            ->where('eventId', $event->eventId)
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
+
+        $pass = EventPass::with(['attendee' => function ($query) use ($isScoped, $scopedAttendeeIds) {
+                $query->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds));
+            }])
+            ->where('eventId', $eventId)
             ->where('serialNumber', $validated['serialNumber'])
             ->first();
 
@@ -80,12 +135,20 @@ $eventId = $validated['eventId'];
             ], 404);
         }
 
+        // If scoped and the attendee is not in scope, hide attendee info
+        $attendeeData = null;
+        if ($pass->attendee) {
+            if (!$isScoped || $scopedAttendeeIds->contains($pass->attendee->attendeeId)) {
+                $attendeeData = $this->formatAttendee($pass->attendee);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'QR code found.',
             'data' => [
                 'pass' => $this->formatPass($pass),
-                'attendee' => $pass->attendee ? $this->formatAttendee($pass->attendee) : null,
+                'attendee' => $attendeeData,
             ],
         ]);
     }
@@ -100,8 +163,25 @@ $eventId = $validated['eventId'];
             'serialNumber' => ['required', 'string', 'max:100'],
         ]);
 
-        $attendee = Attendee::where('eventId', $event->eventId)
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+        
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
+
+        $attendee = Attendee::where('eventId', $eventId)
             ->where('attendeeId', $validated['attendeeId'])
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->first();
 
         if (!$attendee) {
@@ -111,7 +191,7 @@ $eventId = $validated['eventId'];
             ], 404);
         }
 
-        $pass = EventPass::where('eventId', $event->eventId)
+        $pass = EventPass::where('eventId', $eventId)
             ->where('serialNumber', $validated['serialNumber'])
             ->first();
 
@@ -123,18 +203,20 @@ $eventId = $validated['eventId'];
         }
 
         try {
-$result = $this->attendeeRegistrationService->assignPassToAttendee(
-    $attendee,
-    $pass,
-    $request->accommodation,
-    $request->color
-);
+            $result = $this->attendeeRegistrationService->assignPassToAttendee(
+                $attendee,
+                $pass,
+                $request->accommodation
+            );
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Attendee registered successfully.',
                 'data' => [
                     'attendee' => $this->formatAttendee($result['attendee']),
                     'pass' => $this->formatPass($result['pass']),
+                    'color' => $result['color'],
+                    'subCL' => $result['subCL'],
                 ],
             ]);
         } catch (ValidationException $e) {
@@ -190,94 +272,78 @@ $result = $this->attendeeRegistrationService->assignPassToAttendee(
         ];
     }
 
+    public function registeredAttendees(): JsonResponse
+    {
+        $activeEvent = Event::where('status', 'active')->first();
 
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
 
-//     public function registeredAttendees(Event $event): JsonResponse
-// {
-//     $attendees = Attendee::query()
-//         ->with(['pass'])
-//         ->where('eventId', $event->eventId)
-//         ->where('isRegistered', true)
-//         ->orderByDesc('registeredAt')
-//         ->get()
-//         ->map(function (Attendee $attendee) {
-//             return [
-//                 'attendeeId' => $attendee->attendeeId,
-//                 'fullName' => $attendee->fullName,
-//                 'uniqueId' => $attendee->uniqueId,
-//                 'phone' => $attendee->phone,
-//                 'gender' => $attendee->gender,
-//                 'accommodation' => $attendee->accommodation,
-//                 'color' => $attendee->color,
-//                 'serialNumber' => optional($attendee->pass)->serialNumber,
-//                 'registeredAt' => optional($attendee->registeredAt)?->format('Y-m-d H:i:s'),
-//             ];
-//         })
-//         ->values();
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
 
-//     return response()->json([
-//         'success' => true,
-//         'message' => 'Registered attendees retrieved successfully.',
-//         'data' => [
-//             'attendees' => $attendees,
-//         ],
-//     ]);
-// }
+        $attendees = Attendee::query()
+            ->with('pass', 'group_color', 'subCommunityLead.user')
+            ->where('eventId', $activeEvent->eventId)
+            ->where('isRegistered', true)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+            ->orderByDesc('registeredAt')
+            ->get()
+            ->map(function (Attendee $attendee) {
+                return [
+                    'attendeeId' => $attendee->attendeeId,
+                    'fullName' => $attendee->fullName,
+                    'uniqueId' => $attendee->uniqueId,
+                    'phone' => $attendee->phone,
+                    'gender' => $attendee->gender,
+                    'accommodation' => $attendee->accommodation,
+                    'color' => $attendee->group_color?->colorName,
+                    'subcl' => $attendee->subCommunityLead?->user?->firstName . ' ' . $attendee->subCommunityLead?->user?->lastName,
+                    'serialNumber' => $attendee->pass?->serialNumber,
+                    'registeredAt' => $attendee->registeredAt?->format('Y-m-d H:i:s'),
+                ];
+            })
+            ->values();
 
-public function registeredAttendees(): JsonResponse
-{
-    $activeEvent = Event::where('status', 'active')->first();
-
-    if (!$activeEvent) {
         return response()->json([
-            'success' => false,
-            'message' => 'No active event found.',
-        ], 404);
+            'success' => true,
+            'message' => 'Registered attendees retrieved successfully.',
+            'data' => [
+                'event' => $activeEvent->name ?? null,
+                'attendees' => $attendees,
+            ],
+        ]);
     }
-
-    $attendees = Attendee::query()
-        ->with(['pass'])
-        ->where('eventId', $activeEvent->eventId)
-        ->where('isRegistered', true)
-        ->orderByDesc('registeredAt')
-        ->get()
-        ->map(function (Attendee $attendee) {
-            return [
-                'attendeeId' => $attendee->attendeeId,
-                'fullName' => $attendee->fullName,
-                'uniqueId' => $attendee->uniqueId,
-                'phone' => $attendee->phone,
-                'gender' => $attendee->gender,
-                'accommodation' => $attendee->accommodation,
-                'color' => $attendee->color,
-                'serialNumber' => optional($attendee->pass)->serialNumber,
-                'registeredAt' => optional($attendee->registeredAt)?->format('Y-m-d H:i:s'),
-            ];
-        })
-        ->values();
-
-    return response()->json([
-        'success' => true,
-        'message' => 'Registered attendees retrieved successfully.',
-        'data' => [
-            'event' => $activeEvent->name ?? null,
-            'attendees' => $attendees,
-        ],
-    ]);
-}
-
 
     public function registeredAttendees2(Request $request, Event $event): JsonResponse
     {
+        $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
         $search = trim((string) $request->query('search', ''));
+
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
 
         $query = Attendee::with([
                 'currentRoomAllocation',
             ])
-            ->where('eventId', $event->eventId);
-
-        // If you want only attendees that have been assigned a pass, uncomment this:
-        // $query->whereNotNull('passId');
+            ->where('eventId', $activeEvent->eventId)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds));
 
         if ($search !== '') {
             $query->where(function ($q) use ($search) {
@@ -298,8 +364,6 @@ public function registeredAttendees(): JsonResponse
 
                 return [
                     'attendeeId' => $attendee->attendeeId,
-                    // 'fullName' => $attendee->firstName,
-                    // 'lastName' => $attendee->lastName,
                     'fullName' => trim(($attendee->fullName ?? '')),
                     'uniqueId' => $attendee->uniqueId,
                     'phone' => $attendee->phone,
@@ -327,24 +391,37 @@ public function registeredAttendees(): JsonResponse
         ]);
     }
 
+    public function show(Event $event, $attendeeId): JsonResponse
+    {
+        // ── Scoped user filter ────────────────────────────────────────────────
+        $scope = $this->getScopedAttendeeIds();
+        $isScoped = $scope['isScoped'];
+        $scopedAttendeeIds = $scope['attendeeIds'];
 
-    public function show(Event $event, $attendeeId)
-{
-    $event_pass = EventPass::where('serialNumber', $attendeeId)->first();
-    $attendee = Attendee::where('eventId', $event->eventId)
-        ->where('attendeeId', $event_pass->attendeeId)
-        ->first();
+        $event_pass = EventPass::where('serialNumber', $attendeeId)->first();
+        
+        if (!$event_pass) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pass not found',
+            ], 404);
+        }
 
-    if (!$attendee) {
+        $attendee = Attendee::where('eventId', $event->eventId)
+            ->where('attendeeId', $event_pass->attendeeId)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+            ->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Attendee not found',
+            ], 404);
+        }
+
         return response()->json([
-            'success' => false,
-            'message' => 'Attendee not found',
-        ], 404);
+            'success' => true,
+            'data' => $attendee,
+        ]);
     }
-
-    return response()->json([
-        'success' => true,
-        'data' => $attendee,
-    ]);
-}
 }

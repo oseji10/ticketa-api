@@ -15,17 +15,33 @@ class DashboardController extends Controller
         // ── Resolve active event ──────────────────────────────────────────────
         $activeEvent = DB::table('events')
             ->where('status', 'active')
-            ->orderByDesc('created_at')   // if multiple active, take the latest
+            ->orderByDesc('created_at')
             ->first();
 
         if (!$activeEvent) {
             return response()->json([
-                'data' => null,
+                'data'    => null,
                 'message' => 'No active event found.',
             ], 404);
         }
 
         $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
+        // ── Scoped user filter ────────────────────────────────────────────────
+        // Look up the logged-in user's record in sub_cls via userId.
+        // If found, restrict all attendee-linked stats to attendees sharing
+        // that subClId. If no sub_cls record exists, show all data.
+        $subCl = DB::table('sub_cls')
+            ->where('userId', auth()->id())
+            ->first();
+
+        $isScoped         = !is_null($subCl);
+        $scopedAttendeeIds = $isScoped
+            ? DB::table('attendees')
+                ->where('subClId', $subCl->subClId)
+                ->where('isRegistered', 1)
+                ->pluck('attendeeId')
+            : collect();
 
         // ── Date & period ─────────────────────────────────────────────────────
         $selectedDate = $request->filled('date')
@@ -34,7 +50,7 @@ class DashboardController extends Controller
 
         $selectedDateString = $selectedDate->toDateString();
 
-        $programme = $activeEvent->title ?? 'ISSAM Residential Training';
+        $programme = $activeEvent->title    ?? 'ISSAM Residential Training';
         $venue     = $activeEvent->location ?? 'ABU Zaria';
 
         $periodStart = Carbon::parse($activeEvent->startDate ?? $request->query('periodStart', '2026-03-24'))->toDateString();
@@ -42,21 +58,21 @@ class DashboardController extends Controller
 
         // ── Core counts (scoped to active event) ─────────────────────────────
 
-        // Total accredited participants for this event
         $totalParticipants = DB::table('attendees as a')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->distinct()
             ->count('a.attendeeId');
 
-        // Present on selected date — daily_attendances must be scoped to the event
         $presentForDate = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('da.attendanceDate', $selectedDateString)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->distinct()
             ->count('da.attendeeId');
 
@@ -65,7 +81,7 @@ class DashboardController extends Controller
             ? round(($presentForDate / $totalParticipants) * 100, 1)
             : 0;
 
-        // Incidents scoped to event
+        // Incidents are not attendee-linked — always event-wide
         $incidentsForDate = DB::table('incidents')
             ->where('eventId', $eventId)
             ->whereDate('reportedAt', $selectedDateString)
@@ -76,34 +92,35 @@ class DashboardController extends Controller
             ->whereIn('status', ['open', 'pending'])
             ->count();
 
-        // Room allocations scoped to event
         $roomsCheckedForDate = DB::table('room_allocations')
             ->where('eventId', $eventId)
             ->whereDate('allocatedAt', $selectedDateString)
             ->whereNotNull('allocatedAt')
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->count();
 
-        // Meals served (unique attendees) scoped to event
         $mealsServedForDate = DB::table('meal_redemptions as mr')
             ->join('event_passes as ep', 'ep.passId', '=', 'mr.passId')
             ->join('attendees as a', 'a.attendeeId', '=', 'ep.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('mr.created_at', $selectedDateString)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('ep.attendeeId', $scopedAttendeeIds))
             ->distinct('ep.attendeeId')
             ->count('ep.attendeeId');
 
-        // Gender split — present on selected date, scoped to event
+        // Gender split — present on selected date
         $genderSplit = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('da.attendanceDate', $selectedDateString)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->select(
                 DB::raw("
                     CASE
-                        WHEN TRIM(LOWER(a.gender)) IN ('male', 'm') THEN 'male'
+                        WHEN TRIM(LOWER(a.gender)) IN ('male', 'm')   THEN 'male'
                         WHEN TRIM(LOWER(a.gender)) IN ('female', 'f') THEN 'female'
                         ELSE 'other'
                     END as gender
@@ -113,15 +130,16 @@ class DashboardController extends Controller
             ->groupBy('gender')
             ->pluck('count', 'gender');
 
-        // Registered gender split — accredited attendees for this event
+        // Registered gender split — all accredited attendees
         $registeredGenderSplit = DB::table('attendees as a')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->where('a.isRegistered', 1)
+            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->select(
                 DB::raw("
                     CASE
-                        WHEN TRIM(LOWER(a.gender)) IN ('male', 'm') THEN 'male'
+                        WHEN TRIM(LOWER(a.gender)) IN ('male', 'm')   THEN 'male'
                         WHEN TRIM(LOWER(a.gender)) IN ('female', 'f') THEN 'female'
                         ELSE 'other'
                     END as gender
@@ -180,22 +198,23 @@ class DashboardController extends Controller
         ];
 
         // ── Sub-sections ──────────────────────────────────────────────────────
-        $supervisorRows    = $this->buildSupervisorRows($selectedDateString, $eventId);
-        $incidentSnapshot  = $this->buildIncidentSnapshot($selectedDateString, $eventId);
-        $roomMetrics       = $this->buildRoomMetrics($selectedDateString, $eventId);
-        $coordinatorNotes  = $this->buildCoordinatorNotes($supervisorRows, $openIncidents, $selectedDateString);
+        $supervisorRows   = $this->buildSupervisorRows($selectedDateString, $eventId, $isScoped, $scopedAttendeeIds->all());
+        $incidentSnapshot = $this->buildIncidentSnapshot($selectedDateString, $eventId);
+        $roomMetrics      = $this->buildRoomMetrics($selectedDateString, $eventId, $isScoped, $scopedAttendeeIds->all());
+        $coordinatorNotes = $this->buildCoordinatorNotes($supervisorRows, $openIncidents, $selectedDateString);
 
         return response()->json([
             'data' => [
-                'dashboardDate'  => $selectedDate->format('d M Y'),
-                'dayName'        => $selectedDate->format('l'),
-                'programme'      => $programme,
-                'venue'          => $venue,
-                'period'         => Carbon::parse($periodStart)->format('d-M-Y') . ' to ' . Carbon::parse($periodEnd)->format('d-M-Y'),
-                'overviewStats'  => $overviewStats,
-                'supervisorRows' => $supervisorRows,
+                'dashboardDate'    => $selectedDate->format('d M Y'),
+                'dayName'          => $selectedDate->format('l'),
+                'programme'        => $programme,
+                'venue'            => $venue,
+                'period'           => Carbon::parse($periodStart)->format('d-M-Y') . ' to ' . Carbon::parse($periodEnd)->format('d-M-Y'),
+                'scopedToUser'     => $isScoped,
+                'overviewStats'    => $overviewStats,
+                'supervisorRows'   => $supervisorRows,
                 'incidentSnapshot' => $incidentSnapshot,
-                'roomMetrics'    => $roomMetrics,
+                'roomMetrics'      => $roomMetrics,
                 'coordinatorNotes' => $coordinatorNotes,
             ],
         ]);
@@ -203,14 +222,19 @@ class DashboardController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    protected function buildSupervisorRows(string $selectedDate, int $eventId): array
-    {
+    protected function buildSupervisorRows(
+        string $selectedDate,
+        int    $eventId,
+        bool   $isScoped   = false,
+        array  $scopedAttendeeIds = []
+    ): array {
         return DB::table('daily_attendances as da')
             ->join('users as u', 'u.id', '=', 'da.markedBy')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('ep.eventId', $eventId)
             ->whereDate('da.attendanceDate', $selectedDate)
+            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->select(
                 'u.id as supervisorId',
                 DB::raw("TRIM(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) as supervisorName"),
@@ -240,6 +264,7 @@ class DashboardController extends Controller
 
     protected function buildIncidentSnapshot(string $selectedDate, int $eventId): array
     {
+        // Incidents are not attendee-linked — always event-wide
         return DB::table('incidents')
             ->select('category', DB::raw('COUNT(*) as total'))
             ->where('eventId', $eventId)
@@ -253,21 +278,27 @@ class DashboardController extends Controller
             ->toArray();
     }
 
-    protected function buildRoomMetrics(string $selectedDate, int $eventId): array
-    {
+    protected function buildRoomMetrics(
+        string $selectedDate,
+        int    $eventId,
+        bool   $isScoped         = false,
+        array  $scopedAttendeeIds = []
+    ): array {
         $assigned = DB::table('room_allocations')
             ->where('eventId', $eventId)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->count();
 
         $checkedInForDate = DB::table('room_allocations')
             ->where('eventId', $eventId)
             ->whereNotNull('allocatedAt')
             ->whereDate('allocatedAt', $selectedDate)
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->count();
 
         return [
-            ['metric' => 'Assigned (All)',       'value' => $assigned],
-            ['metric' => 'Checked In for Date',  'value' => $checkedInForDate],
+            ['metric' => 'Assigned (All)',      'value' => $assigned],
+            ['metric' => 'Checked In for Date', 'value' => $checkedInForDate],
         ];
     }
 

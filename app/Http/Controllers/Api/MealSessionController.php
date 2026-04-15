@@ -32,6 +32,58 @@ class MealSessionController extends Controller
         ]);
     }
 
+
+    // public function getMealSessions(Request $request, Event $event): JsonResponse
+    // {
+    //     $query = $event->mealSessions()->withCount('redemptions');
+
+    //     if ($request->filled('status')) {
+    //         $query->where('status', $request->status);
+    //     }
+
+    //     $sessions = $query
+    //         // ->orderBy('mealDate')
+    //         // ->orderBy('startTime')
+
+    //         ->latest('mealSessionId')
+    //         ->paginate($request->integer('per_page', 20));
+
+    //     return response()->json([
+    //         'success' => true,
+    //         'data' => $sessions,
+    //     ]);
+    // }
+
+
+public function getMealSessions(Request $request): JsonResponse
+{
+    $event = Event::where('status', 'active')->first();
+
+    if (!$event) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found'
+        ], 404);
+    }
+
+    $query = $event->mealSessions()->withCount('redemptions');
+
+    if ($request->filled('status')) {
+        $query->where('status', $request->status);
+    }
+
+    $sessions = $query
+        ->latest('mealSessionId')
+        ->paginate($request->integer('per_page', 20));
+
+    return response()->json([
+        'success' => true,
+        'data' => $sessions,
+    ]);
+}
+
+    
+
     public function store(Request $request, Event $event): JsonResponse
     {
        $user = auth()->user();
