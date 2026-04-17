@@ -499,8 +499,19 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
+        $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+    
+    $eventId = $activeEvent->eventId ?? $activeEvent->id;
         $presentIds = DB::table('daily_attendances')
             ->whereDate('attendanceDate', $date)
+            ->where('eventId', $eventId)
             ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
             ->pluck('attendeeId')
             ->unique()

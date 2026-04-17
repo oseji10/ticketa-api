@@ -304,6 +304,7 @@ class AttendeeRegistrationController extends Controller
                     'gender' => $attendee->gender,
                     'accommodation' => $attendee->accommodation,
                     'color' => $attendee->group_color?->colorName,
+                    'colorHex' => $attendee->group_color?->hexCode,
                     'subcl' => $attendee->subCommunityLead?->user?->firstName . ' ' . $attendee->subCommunityLead?->user?->lastName,
                     'serialNumber' => $attendee->pass?->serialNumber,
                     'registeredAt' => $attendee->registeredAt?->format('Y-m-d H:i:s'),
@@ -341,20 +342,24 @@ class AttendeeRegistrationController extends Controller
 
         $query = Attendee::with([
                 'currentRoomAllocation',
+                'colors'
             ])
             ->where('eventId', $activeEvent->eventId)
             ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds));
 
         if ($search !== '') {
-            $query->where(function ($q) use ($search) {
-                $q->where('phone', 'LIKE', "%{$search}%")
-                    ->orWhere('uniqueId', 'LIKE', "%{$search}%")
-                    ->orWhereRaw(
-                        "CONCAT(COALESCE(fullName, '')) LIKE ?",
-                        ["%{$search}%"]
-                    );
-            });
-        }
+    $query->where(function ($q) use ($search) {
+        $q->where('phone', 'LIKE', "%{$search}%")
+            ->orWhere('uniqueId', 'LIKE', "%{$search}%")
+            ->orWhereRaw(
+                "CONCAT(COALESCE(fullName, '')) LIKE ?",
+                ["%{$search}%"]
+            )
+            ->orWhereHas('color', function ($q2) use ($search) {
+                $q2->where('colorName', 'LIKE', "%{$search}%");
+            }); // 👈 THIS is the key
+    });
+}
 
         $attendees = $query
             ->orderBy('fullName')

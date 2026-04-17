@@ -162,7 +162,7 @@
 
 @php
     $passRows = $passes->chunk(2);
-    $logoPath = asset('images/wima-base.png');
+    $logoPath = public_path('storage/images/wima-base.png');
 @endphp
 
 @foreach($passRows as $row)
@@ -199,10 +199,10 @@
                     // Color 7: Orange
                     $bg = '#F59E0B'; $text = '#000000';
                 } elseif ($serial >= 253 && $serial <= 288) {
-                    // Color 8: Red
+                    // Color 8: Brown
                     $bg = '#964B00'; $text = '#FFFFFF';
                 } else {
-                    // After 288, use last color (Red)
+                    // After 288, use last color (Brown)
                     $bg = '#964B00'; $text = '#FFFFFF';
                 }
             @endphp
@@ -255,7 +255,7 @@
                                 </div>
 
                                 <div class="front-main-title">
-                                    Programme Access Tag
+                                    Access Tag
                                 </div>
 
                                 <!-- 🔥 WHITE BOX FOR MANUAL NAME WRITING (No Serial Number) -->
