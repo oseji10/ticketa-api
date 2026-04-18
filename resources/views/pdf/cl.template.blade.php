@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Sub Community Lead Tags</title>
+    <title>Community Lead Tags</title>
 
     <style>
         @page {
@@ -144,20 +144,12 @@
     ];
 
     $logoPath = public_path('storage/images/wima-base.png');
-    
-    // Create 3 sub community leads per color
-    $allTags = [];
-    foreach ($colors as $color) {
-        for ($i = 1; $i <= 3; $i++) {
-            $allTags[] = $color;
-        }
-    }
 @endphp
 
-@foreach($allTags as $tagIndex => $color)
+@foreach($colors as $index => $color)
     <table class="passes-table">
         <tr>
-            <!-- LEFT SIDE: FRONT -->
+            <!-- LEFT SIDE (Same as Right) -->
             <td>
                 <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
                     
@@ -177,7 +169,7 @@
                             </div>
 
                             <div class="front-main-title">
-                                Sub Community Lead
+                                Community Lead
                             </div>
 
                             <!-- <div class="name-write-box">
@@ -198,7 +190,7 @@
                 </div>
             </td>
 
-            <!-- RIGHT SIDE: BACK (Identical to Front) -->
+            <!-- RIGHT SIDE (Identical to Left) -->
             <td>
                 <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
                     
@@ -218,7 +210,7 @@
                             </div>
 
                             <div class="front-main-title">
-                                Sub Community Lead
+                                Community Lead
                             </div>
 
                             <!-- <div class="name-write-box">
@@ -241,7 +233,7 @@
         </tr>
     </table>
 
-    @if($tagIndex < count($allTags) - 1)
+    @if($index < 6)
         <div class="page-break"></div>
     @endif
 @endforeach
