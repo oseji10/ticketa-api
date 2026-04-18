@@ -152,63 +152,96 @@
             $allTags[] = $color;
         }
     }
-    
-    // Chunk into pairs for table layout (2 tags per row)
-    $tagPairs = array_chunk($allTags, 2);
 @endphp
 
-@foreach($tagPairs as $pairIndex => $pair)
+@foreach($allTags as $tagIndex => $color)
     <table class="passes-table">
         <tr>
-            @foreach($pair as $tagIndex => $color)
-                <td>
-                    <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
-                        
-                        <div class="event-title">
-                            {{ $event->title ?? 'EVENT TITLE' }}
-                        </div>
-
-                        <div class="event-meta">
-                            {{ $event->startDate ?? 'START DATE' }} - {{ $event->endDate ?? 'END DATE' }}<br>
-                        </div>
-
-                        <div class="front-box">
-                            <div class="front-box-inner">
-
-                                <div class="front-logo-wrap">
-                                    <img src="{{ $logoPath }}">
-                                </div>
-
-                                <div class="front-main-title">
-                                    Sub Community Lead
-                                </div>
-
-                                <!-- <div class="name-write-box">
-                                    (Write participant name here)
-                                </div> -->
-
-                                <div class="color-label">
-                                    {{ $color['name'] }} Team
-                                </div>
-
-                                <!-- <div class="front-footer">
-                                    Valid for accredited participant use only
-                                </div> -->
-
-                            </div>
-                        </div>
-
+            <!-- LEFT SIDE: FRONT -->
+            <td>
+                <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
+                    
+                    <div class="event-title">
+                        {{ $event->title ?? 'EVENT TITLE' }}
                     </div>
-                </td>
-            @endforeach
-            
-            @if(count($pair) < 2)
-                <td></td>
-            @endif
+
+                    <div class="event-meta">
+                        {{ $event->startDate ?? 'START DATE' }} - {{ $event->endDate ?? 'END DATE' }}<br>
+                    </div>
+
+                    <div class="front-box">
+                        <div class="front-box-inner">
+
+                            <div class="front-logo-wrap">
+                                <img src="{{ $logoPath }}">
+                            </div>
+
+                            <div class="front-main-title">
+                                Sub Community Lead
+                            </div>
+
+                            <!-- <div class="name-write-box">
+                                (Write participant name here)
+                            </div> -->
+
+                            <div class="color-label">
+                                {{ $color['name'] }} Team
+                            </div>
+
+                            <!-- <div class="front-footer">
+                                Valid for accredited participant use only
+                            </div> -->
+
+                        </div>
+                    </div>
+
+                </div>
+            </td>
+
+            <!-- RIGHT SIDE: BACK (Identical to Front) -->
+            <td>
+                <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
+                    
+                    <div class="event-title">
+                        {{ $event->title ?? 'EVENT TITLE' }}
+                    </div>
+
+                    <div class="event-meta">
+                        {{ $event->startDate ?? 'START DATE' }} - {{ $event->endDate ?? 'END DATE' }}<br>
+                    </div>
+
+                    <div class="front-box">
+                        <div class="front-box-inner">
+
+                            <div class="front-logo-wrap">
+                                <img src="{{ $logoPath }}">
+                            </div>
+
+                            <div class="front-main-title">
+                                Sub Community Lead
+                            </div>
+
+                            <!-- <div class="name-write-box">
+                                (Write participant name here)
+                            </div> -->
+
+                            <div class="color-label">
+                                {{ $color['name'] }} Team
+                            </div>
+
+                            <!-- <div class="front-footer">
+                                Valid for accredited participant use only
+                            </div> -->
+
+                        </div>
+                    </div>
+
+                </div>
+            </td>
         </tr>
     </table>
 
-    @if($pairIndex < count($tagPairs) - 1)
+    @if($tagIndex < count($allTags) - 1)
         <div class="page-break"></div>
     @endif
 @endforeach

@@ -531,6 +531,7 @@ public function attendanceTrend(Request $request): JsonResponse
             )
             ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
             ->where('isRegistered', 1)
+             ->where('eventId', $eventId)
             ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->orderBy('fullName')
             ->get();
