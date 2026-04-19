@@ -105,7 +105,7 @@ class DailyAttendanceService
             $scanSource
         ) {
             return DailyAttendance::create([
-                'eventId' => $event->eventId,
+                'eventId' => $eventId,
                 'attendeeId' => $pass->attendeeId,
                 'eventPassId' => $pass->passId,
                 'attendanceDate' => $attendanceDateValue,

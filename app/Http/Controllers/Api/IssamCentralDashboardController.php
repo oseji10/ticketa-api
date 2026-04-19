@@ -406,6 +406,15 @@ public function attendanceTrend(Request $request): JsonResponse
 
     protected function totalParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
+        $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+
         $rows = DB::table('attendees as a')
         ->join('event_passes as ep', 'a.attendeeId', '=', 'ep.attendeeId')
             ->select(
@@ -417,6 +426,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 'a.photoUrl'
             )
             ->where('a.isRegistered', 1)
+            ->where('a.eventId', $activeEvent->eventId)
             ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
             ->orderBy('a.fullName')
             ->get();
@@ -497,7 +507,97 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-    protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
+protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
+{
+    $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+    
+    $eventId = $activeEvent->eventId;
+    
+    // Debug: Check what's in daily_attendances for this event
+    $allAttendances = DB::table('daily_attendances')
+        ->where('eventId', $eventId)
+        ->select('attendanceDate', DB::raw('COUNT(*) as count'))
+        ->groupBy('attendanceDate')
+        ->get();
+    
+    \Log::info('All attendance dates for event:', ['dates' => $allAttendances]);
+    \Log::info('Searching for date:', ['date' => $date]);
+    
+    // Try multiple date formats
+    $presentIds = DB::table('daily_attendances')
+        ->where('eventId', $eventId)
+        ->where(function($query) use ($date) {
+            $query->whereDate('attendanceDate', $date)
+                  ->orWhere('attendanceDate', $date)
+                  ->orWhere(DB::raw('DATE(attendanceDate)'), $date);
+        })
+        ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+        ->pluck('attendeeId')
+        ->unique()
+        ->toArray();
+
+    \Log::info('Present IDs found:', ['count' => count($presentIds), 'ids' => $presentIds]);
+
+    // Get all registered attendees for this event who were NOT present
+    $rows = DB::table('attendees as a')
+        ->leftJoin('event_passes as ep', function($join) use ($eventId) {
+            $join->on('ep.attendeeId', '=', 'a.attendeeId')
+                 ->where('ep.eventId', '=', $eventId);
+        })
+        ->select(
+            'a.attendeeId',
+            'a.uniqueId',
+            DB::raw('UPPER(a.fullName) as fullName'),
+            'a.phone',
+            'a.gender',
+            'a.photoUrl',
+            'ep.serialNumber',
+            DB::raw('UPPER(a.lga) as lga'),
+        )
+        ->where('a.eventId', $eventId)
+        ->where('a.isRegistered', 1);
+
+    if (!empty($presentIds)) {
+        $rows->whereNotIn('a.attendeeId', $presentIds);
+    }
+
+    if ($isScoped) {
+        $rows->whereIn('a.attendeeId', $scopedAttendeeIds);
+    }
+
+    $rows = $rows->orderBy('fullName')->get();
+
+    return response()->json([
+        'title' => 'Absent Participants',
+        'date' => $date,
+        'debug' => [
+            'eventId' => $eventId,
+            'dateSearched' => $date,
+            'availableDates' => $allAttendances,
+            'presentCount' => count($presentIds),
+        ],
+        'summary' => [
+            'absentCount' => $rows->count(),
+        ],
+        'columns' => [
+            ['key' => 'uniqueId', 'label' => 'Participant ID'],
+            ['key' => 'fullName', 'label' => 'Full Name'],
+            ['key' => 'phone', 'label' => 'Phone Number'],
+            ['key' => 'gender', 'label' => 'Gender'],
+            ['key' => 'serialNumber', 'label' => 'Serial Number'],
+            ['key' => 'lga', 'label' => 'LGA'],
+        ],
+        'rows' => $rows,
+    ]);
+}
+    protected function attendancePercentageDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
     {
         $activeEvent = Event::where('status', 'active')->first();
 
@@ -509,53 +609,6 @@ public function attendanceTrend(Request $request): JsonResponse
     }
     
     $eventId = $activeEvent->eventId ?? $activeEvent->id;
-        $presentIds = DB::table('daily_attendances')
-            ->whereDate('attendanceDate', $date)
-            ->where('eventId', $eventId)
-            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
-            ->pluck('attendeeId')
-            ->unique()
-            ->filter()
-            ->values();
-
-        $rows = DB::table('attendees as a')
-        ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-            ->select(
-                'a.uniqueId',
-                DB::raw('UPPER(a.fullName) as fullName'),
-                'a.phone',
-                'a.gender',
-                'a.photoUrl',
-                'ep.serialNumber',
-                DB::raw('UPPER(a.lga) as lga'),
-            )
-            ->when($presentIds->isNotEmpty(), fn ($q) => $q->whereNotIn('a.attendeeId', $presentIds))
-            ->where('isRegistered', 1)
-             ->where('eventId', $eventId)
-            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
-            ->orderBy('fullName')
-            ->get();
-
-        return response()->json([
-            'title' => 'Absent Participants',
-            'date' => $date,
-            'summary' => [
-                'absentCount' => $rows->count(),
-            ],
-            'columns' => [
-                ['key' => 'uniqueId', 'label' => 'Participant ID'],
-                ['key' => 'fullName', 'label' => 'Full Name'],
-                ['key' => 'phone', 'label' => 'Phone Number'],
-                ['key' => 'gender', 'label' => 'Gender'],
-                ['key' => 'serialNumber', 'label' => 'Serial Number'],
-                 ['key' => 'lga', 'label' => 'LGA'],
-            ],
-            'rows' => $rows,
-        ]);
-    }
-
-    protected function attendancePercentageDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
-    {
         $totalParticipants = DB::table('attendees')
             ->where('isRegistered', 1)
             ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))

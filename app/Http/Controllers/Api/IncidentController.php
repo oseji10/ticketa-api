@@ -83,6 +83,14 @@ class IncidentController extends Controller
 
     public function index(Request $request, Event $event): JsonResponse
     {
+                 $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
         $this->ensureIncidentAccess();
 
         $search = trim((string) $request->query('search', ''));
@@ -94,7 +102,7 @@ class IncidentController extends Controller
         $roomId = $request->query('roomId');
 
         $query = Incident::with(['reporter', 'assignee', 'attendee', 'room'])
-            ->where('eventId', $event->eventId);
+            ->where('eventId', $activeEvent->eventId);
 
         if ($status !== '') {
             $query->where('status', $status);
@@ -158,6 +166,14 @@ class IncidentController extends Controller
 
     public function store(Request $request, Event $event): JsonResponse
     {
+         $activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
         $this->ensureIncidentAccess();
 
         $validated = $request->validate([
@@ -199,7 +215,7 @@ class IncidentController extends Controller
             }
 
             $incident = Incident::create([
-                'eventId' => $event->eventId,
+                'eventId' => $activeEvent->eventId,
                 'incidentCode' => $this->generateIncidentCode(),
                 'title' => trim($validated['title']),
                 'description' => trim($validated['description']),
