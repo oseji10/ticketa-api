@@ -106,4 +106,9 @@ public function subCommunityLead()
     return $this->belongsTo(SubCL::class, 'subClId');
 }
 
+public function subcl()
+{
+    return $this->belongsTo(SubCL::class, 'subClId');
+}
+
 }

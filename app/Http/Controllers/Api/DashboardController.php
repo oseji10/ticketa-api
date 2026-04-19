@@ -222,38 +222,54 @@ class DashboardController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    protected function buildSupervisorRows(
-        string $selectedDate,
-        int    $eventId,
-        bool   $isScoped   = false,
-        array  $scopedAttendeeIds = []
-    ): array {
-        return DB::table('daily_attendances as da')
-            ->join('users as u', 'u.id', '=', 'da.markedBy')
-            ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
-            ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-            ->where('ep.eventId', $eventId)
-            ->whereDate('da.attendanceDate', $selectedDate)
-            ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
-            ->select(
-                'u.id as supervisorId',
-                DB::raw("TRIM(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) as supervisorName"),
-                DB::raw('COUNT(DISTINCT da.attendeeId) as attendanceCount')
-            )
-            ->groupBy('u.id', 'u.firstName', 'u.lastName')
-            ->orderByDesc('attendanceCount')
-            ->get()
-            ->map(function ($row) {
-                return [
-                    'supervisorId'    => $row->supervisorId,
-                    'supervisorName'  => $row->supervisorName,
-                    'attendanceCount' => (int) $row->attendanceCount,
-                    'status'          => $this->resolveSupervisorStatus((int) $row->attendanceCount),
-                ];
-            })
-            ->values()
-            ->all();
-    }
+   protected function buildSupervisorRows(
+    string $selectedDate,
+    int    $eventId,
+    bool   $isScoped   = false,
+    array  $scopedAttendeeIds = []
+): array {
+    // Get all Sub-CL supervisors (users who have a sub_cls record)
+    $allSupervisors = DB::table('sub_cls as sc')
+        ->join('users as u', 'u.id', '=', 'sc.userId')
+        ->select(
+            'u.id as supervisorId',
+            DB::raw("TRIM(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) as supervisorName"),
+            'sc.subClId'
+        )
+        ->get()
+        ->keyBy('supervisorId');
+
+    // Get attendance counts for each supervisor on the selected date
+    $attendanceCounts = DB::table('daily_attendances as da')
+        ->join('users as u', 'u.id', '=', 'da.markedBy')
+        ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+        ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+        ->where('ep.eventId', $eventId)
+        ->whereDate('da.attendanceDate', $selectedDate)
+        ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
+        ->select(
+            'u.id as supervisorId',
+            DB::raw('COUNT(DISTINCT da.attendeeId) as attendanceCount')
+        )
+        ->groupBy('u.id')
+        ->pluck('attendanceCount', 'supervisorId');
+
+    // Combine all supervisors with their attendance counts
+    return $allSupervisors->map(function ($supervisor) use ($attendanceCounts) {
+        $count = (int) ($attendanceCounts[$supervisor->supervisorId] ?? 0);
+        
+        return [
+            'supervisorId'    => $supervisor->supervisorId,
+            'supervisorName'  => $supervisor->supervisorName,
+            'subClId'         => $supervisor->subClId,
+            'attendanceCount' => $count,
+            'status'          => $this->resolveSupervisorStatus($count),
+        ];
+    })
+    ->sortByDesc('attendanceCount')
+    ->values()
+    ->all();
+}
 
     protected function resolveSupervisorStatus(int $count): string
     {

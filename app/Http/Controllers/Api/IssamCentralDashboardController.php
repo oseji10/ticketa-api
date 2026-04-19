@@ -359,7 +359,15 @@ public function attendanceTrend(Request $request): JsonResponse
     }
 
     protected function handleSupervisorDetail(string $date, ?int $supervisorId, bool $isScoped, $scopedAttendeeIds): JsonResponse
-    {
+    {$activeEvent = Event::where('status', 'active')->first();
+
+    if (!$activeEvent) {
+        return response()->json([
+            'success' => false,
+            'message' => 'No active event found.',
+        ], 404);
+    }
+
         $rows = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('users as u', 'u.id', '=', 'da.markedBy')
@@ -372,6 +380,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 DB::raw("CONCAT(u.firstName, ' ', u.lastName) as supervisorName")
             )
             ->whereDate('da.attendanceDate', $date)
+            ->where('eventId', $activeEvent->eventId)
             ->when($supervisorId, fn ($q) => $q->where('u.id', $supervisorId))
             ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
             ->orderByDesc('da.attendanceId')
@@ -507,7 +516,7 @@ public function attendanceTrend(Request $request): JsonResponse
         ]);
     }
 
-protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds): JsonResponse
+protected function absentParticipantsDetail(string $date, bool $isScoped, $scopedAttendeeIds)
 {
     $activeEvent = Event::where('status', 'active')->first();
 
@@ -521,7 +530,7 @@ protected function absentParticipantsDetail(string $date, bool $isScoped, $scope
     $eventId = $activeEvent->eventId;
     
     // Debug: Check what's in daily_attendances for this event
-    $allAttendances = DB::table('daily_attendances')
+     $allAttendances = DB::table('daily_attendances')
         ->where('eventId', $eventId)
         ->select('attendanceDate', DB::raw('COUNT(*) as count'))
         ->groupBy('attendanceDate')

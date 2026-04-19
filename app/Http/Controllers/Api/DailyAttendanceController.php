@@ -183,7 +183,7 @@ class DailyAttendanceController extends Controller
         $date = $request->query('date', now()->toDateString());
         $search = trim((string) $request->query('search', ''));
 
-        $query = DailyAttendance::with(['attendee', 'pass', 'marker'])
+        $query = DailyAttendance::with(['attendee', 'pass', 'marker', 'attendee.color', 'attendee.subcl.user'])
             ->where('eventId', $event->eventId)
             ->whereDate('attendanceDate', $date);
 

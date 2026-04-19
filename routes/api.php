@@ -14,7 +14,7 @@ use App\Http\Controllers\Api\EventController;
 use App\Http\Controllers\Api\IncidentController;
 use App\Http\Controllers\Api\RiskProfileController;
 use App\Http\Controllers\Api\ExitController;
-
+use App\Http\Controllers\Api\ColorGroupsController;
 use App\Http\Controllers\Api\RoomAllocationController;
 use App\Http\Controllers\Api\RoomCheckinController;
 use App\Http\Controllers\Api\MedicationController;
@@ -227,6 +227,18 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     
     // Get statistics
     Route::get('/exits/statistics', [ExitController::class, 'getStatistics']);
+
+
+    // Color Groups Dashboard
+  
+        Route::get('colors', [ColorGroupsController::class, 'index']);
+        
+        // Get Sub-CLs for a specific color
+        Route::get('colors/{colorId}/subcls', [ColorGroupsController::class, 'getSubCLs']);
+        
+        // Get participants for a specific color (with optional Sub-CL filter)
+        Route::get('colors/{colorId}/participants', [ColorGroupsController::class, 'getParticipants']);
+    
 
 });
 
