@@ -141,6 +141,7 @@ class ColorGroupsController extends Controller
 
         $query = DB::table('attendees as a')
             ->leftJoin('sub_cls as sc', 'sc.subClId', '=', 'a.subClId')
+            ->leftJoin('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
             ->where('a.eventId', $activeEvent->eventId)
             ->where('a.colorId', $colorId)
             ->where('a.isRegistered', 1);
@@ -186,7 +187,8 @@ class ColorGroupsController extends Controller
             'a.subClId',
             'sc.state as subClState',
             'sc.lga as subClLga',
-            'sc.ward as subClWard'
+            'sc.ward as subClWard',
+            'ep.serialNumber'
         )
         ->orderBy('a.fullName');
 

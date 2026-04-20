@@ -103,9 +103,10 @@ class DailyAttendanceService
             $attendanceDateValue,
             $deviceName,
             $scanSource
-        ) {
+            ) {
+            $activeEvent = Event::where('status', 'active')->first();
             return DailyAttendance::create([
-                'eventId' => $eventId,
+                'eventId' => $activeEvent->eventId,
                 'attendeeId' => $pass->attendeeId,
                 'eventPassId' => $pass->passId,
                 'attendanceDate' => $attendanceDateValue,
