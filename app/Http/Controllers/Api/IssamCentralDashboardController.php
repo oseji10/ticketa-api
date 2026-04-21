@@ -556,6 +556,9 @@ protected function absentParticipantsDetail(string $date, bool $isScoped, $scope
 
     // Get all registered attendees for this event who were NOT present
     $rows = DB::table('attendees as a')
+       ->leftJoin('colors', 'colors.colorId', '=', 'a.colorId')
+       ->leftJoin('sub_cls', 'sub_cls.subClId', '=', 'a.subClId')
+       ->leftJoin('users', 'users.id', '=', 'sub_cls.userId')
         ->leftJoin('event_passes as ep', function($join) use ($eventId) {
             $join->on('ep.attendeeId', '=', 'a.attendeeId')
                  ->where('ep.eventId', '=', $eventId);
@@ -568,6 +571,9 @@ protected function absentParticipantsDetail(string $date, bool $isScoped, $scope
             'a.gender',
             'a.photoUrl',
             'ep.serialNumber',
+            'colors.colorName',
+            DB::raw('UPPER(colors.colorName) as color'),
+            DB::raw("CONCAT(users.firstName, ' ', users.lastName) as subclName"),
             DB::raw('UPPER(a.lga) as lga'),
         )
         ->where('a.eventId', $eventId)
@@ -602,6 +608,8 @@ protected function absentParticipantsDetail(string $date, bool $isScoped, $scope
             ['key' => 'gender', 'label' => 'Gender'],
             ['key' => 'serialNumber', 'label' => 'Serial Number'],
             ['key' => 'lga', 'label' => 'LGA'],
+            ['key' => 'color', 'label' => 'Color'],
+            ['key' => 'subclName', 'label' => 'Sub CL'],
         ],
         'rows' => $rows,
     ]);
