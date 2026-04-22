@@ -12,6 +12,7 @@
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "php-open-source-saver/jwt-auth": "^2.9",
+        "phpoffice/phpspreadsheet": "^5.7",
         "simplesoftwareio/simple-qrcode": "^4.2"
     },
     "require-dev": {

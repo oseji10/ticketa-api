@@ -111,4 +111,50 @@ public function subcl()
     return $this->belongsTo(SubCL::class, 'subClId');
 }
 
+
+
+ public function eventPasses()
+    {
+        return $this->hasMany(EventPass::class, 'attendeeId', 'attendeeId');
+    }
+ 
+    /**
+     * Get the medical information for the attendee.
+     */
+    public function medicalInfo()
+    {
+        return $this->hasOne(ParticipantMedicalInfo::class, 'attendeeId', 'attendeeId');
+    }
+ 
+    /**
+     * Get the medication history for the attendee.
+     */
+    public function medicationHistory()
+    {
+        return $this->hasMany(MedicationDispensing::class, 'attendeeId', 'attendeeId')
+                    ->orderBy('dispensed_at', 'desc');
+    }
+ 
+    /**
+     * Check if attendee has critical medical alerts
+     */
+    public function hasCriticalMedicalAlerts(): bool
+    {
+        return $this->medicalInfo && $this->medicalInfo->hasCriticalAlerts();
+    }
+ 
+    /**
+     * Get attendee by QR code serial number (searches through event passes)
+     */
+    public static function findByQrCode(string $qrCode): ?self
+    {
+        $eventPass = EventPass::where('serial_number', $qrCode)
+                              ->orWhere('qr_code', $qrCode)
+                              ->first();
+        
+        return $eventPass ? $eventPass->attendee : null;
+    }
+
+
+
 }

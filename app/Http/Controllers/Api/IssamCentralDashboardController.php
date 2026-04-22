@@ -492,7 +492,9 @@ public function attendanceTrend(Request $request): JsonResponse
                 'serialNumber' => $row->serialNumber,
                 'photoUrl' => $row->photoUrl,
                 'attendanceDate' => $row->attendanceDate,
-                // 'markedBy' => $row->markedBy,
+                DB::raw('UPPER(colors.colorName) as color'),
+                // DB::raw("CONCAT(users.firstName, ' ', users.lastName) as subclName"),
+                'markedBy' => $row->markedBy,
                 'lga' => $row->lga,
             ]);
 

@@ -202,6 +202,16 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/medications/history/search', [MedicationController::class, 'searchRecipientHistory']);
     
     
+
+    Route::get('/medications/attendees/{attendeeId}/medical-info', [MedicationController::class, 'getAttendeeMedicalInfo']);
+    
+    // Get attendee medical information by QR code
+    Route::get('/medications/qr/{qrCode}/medical-info', [MedicationController::class, 'getAttendeeMedicalInfoByQr']);
+    
+    // Update attendee medical information
+    Route::put('/medications/attendees/{attendeeId}/medical-info', [MedicationController::class, 'updateAttendeeMedicalInfo']);
+    
+    
     // ==========================================
     // REPORTS (Medical Staff/Admin)
     // ==========================================

@@ -864,4 +864,338 @@ class MedicationController extends Controller
             'data' => $supply->fresh(),
         ]);
     }
+
+    /**
+     * Search for attendees by name, ID, or QR code serial number
+     */
+    // public function searchAttendees(Request $request)
+    // {
+    //     $search = $request->input('search');
+
+    //     if (strlen($search) < 2) {
+    //         return response()->json([
+    //             'message' => 'Search term must be at least 2 characters',
+    //             'attendees' => []
+    //         ], 400);
+    //     }
+
+    //     // Search by name directly in attendees table
+    //     $attendeesByName = Attendee::where('full_name', 'LIKE', "%{$search}%")
+    //         ->orWhere('attendeeId', 'LIKE', "%{$search}%")
+    //         ->limit(20)
+    //         ->get(['attendeeId', 'full_name', 'phone_number', 'state', 'lga']);
+
+    //     // Search by QR code/serial number in event_passes table
+    //     $eventPasses = EventPass::where('serial_number', 'LIKE', "%{$search}%")
+    //         ->orWhere('qr_code', 'LIKE', "%{$search}%")
+    //         ->with('attendee:attendeeId,full_name,phone_number,state,lga')
+    //         ->limit(20)
+    //         ->get();
+
+    //     // Extract attendees from event passes
+    //     $attendeesByQr = $eventPasses->map(function ($pass) {
+    //         return $pass->attendee;
+    //     })->filter()->values();
+
+    //     // Merge and remove duplicates
+    //     $allAttendees = $attendeesByName->merge($attendeesByQr)
+    //         ->unique('attendeeId')
+    //         ->values()
+    //         ->take(20);
+
+    //     return response()->json([
+    //         'attendees' => $allAttendees
+    //     ]);
+    // }
+
+    /**
+     * Get medical information for a specific attendee
+     */
+    public function getAttendeeMedicalInfo($attendeeId)
+    {
+        $attendee = Attendee::where('attendeeId', $attendeeId)->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'message' => 'Participant not found'
+            ], 404);
+        }
+
+        $medicalInfo = $attendee->medicalInfo;
+
+        if (!$medicalInfo) {
+            // Return default/empty medical info if none exists
+            return response()->json([
+                'medicalInfo' => [
+                    'hasAllergy' => false,
+                    'allergyDetails' => null,
+                    'hasDrugAllergy' => false,
+                    'drugAllergyType' => null,
+                    'isPregnant' => false,
+                    'pregnancyMonths' => null,
+                    'isBreastfeeding' => false,
+                    'onMedications' => false,
+                    'medicationType' => null,
+                    'onBirthControl' => false,
+                    'hasSurgicalHistory' => false,
+                    'surgicalHistoryDetails' => null,
+                    'hasMedicalConditions' => false,
+                    'medicalConditionsDetails' => null,
+                ]
+            ]);
+        }
+
+        return response()->json([
+            'medicalInfo' => $medicalInfo->toApiResponse()
+        ]);
+    }
+
+    /**
+     * Get medical information by QR code
+     */
+    public function getAttendeeMedicalInfoByQr($qrCode)
+    {
+        // Find event pass by QR code
+        $eventPass = EventPass::where('serial_number', $qrCode)
+                              ->orWhere('qr_code', $qrCode)
+                              ->first();
+
+        if (!$eventPass || !$eventPass->attendee) {
+            return response()->json([
+                'message' => 'Participant not found for this QR code'
+            ], 404);
+        }
+
+        // Use the regular method with the found attendeeId
+        return $this->getAttendeeMedicalInfo($eventPass->attendee->attendeeId);
+    }
+
+    /**
+     * Get medication history for a specific attendee
+     */
+    public function getAttendeeMedicationHistory($attendeeId)
+    {
+        $attendee = Attendee::where('attendeeId', $attendeeId)->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'message' => 'Participant not found'
+            ], 404);
+        }
+
+        $history = $attendee->medicationHistory()
+            ->with('dispensedByUser:id,name')
+            ->get()
+            ->map(function ($record) {
+                return [
+                    'dispensingId' => $record->id,
+                    'drugName' => $record->drug_name,
+                    'quantityDispensed' => $record->quantity_dispensed,
+                    'symptoms' => $record->symptoms,
+                    'instructions' => $record->instructions,
+                    'batchNumber' => $record->batch_number,
+                    'dispensedBy' => $record->dispensedByUser->name ?? 'Unknown',
+                    'dispensedAt' => $record->dispensed_at,
+                ];
+            });
+
+        return response()->json([
+            'history' => $history
+        ]);
+    }
+
+    /**
+     * Get available medications
+     */
+    // public function getAvailableMedications()
+    // {
+    //     $medications = DB::table('medication_inventory')
+    //         ->select(
+    //             'drug_name',
+    //             DB::raw('SUM(quantity_remaining) as total_remaining'),
+    //             DB::raw('MIN(expiry_date) as nearest_expiry')
+    //         )
+    //         ->where('quantity_remaining', '>', 0)
+    //         ->groupBy('drug_name')
+    //         ->get()
+    //         ->map(function ($med) {
+    //             $isExpiringSoon = false;
+    //             if ($med->nearest_expiry) {
+    //                 $expiryDate = \Carbon\Carbon::parse($med->nearest_expiry);
+    //                 $isExpiringSoon = $expiryDate->diffInDays(now()) <= 90; // 3 months
+    //             }
+
+    //             return [
+    //                 'drugName' => $med->drug_name,
+    //                 'totalRemaining' => $med->total_remaining,
+    //                 'nearestExpiry' => $med->nearest_expiry,
+    //                 'isExpiringSoon' => $isExpiringSoon,
+    //             ];
+    //         });
+
+    //     return response()->json([
+    //         'medications' => $medications
+    //     ]);
+    // }
+
+    /**
+     * Dispense medication
+     */
+    // public function dispenseMedication(Request $request)
+    // {
+    //     $validated = $request->validate([
+    //         'isParticipant' => 'required|boolean',
+    //         'attendeeId' => 'required_if:isParticipant,true|nullable|exists:attendees,attendeeId',
+    //         'recipientName' => 'required_if:isParticipant,false|nullable|string|max:255',
+    //         'recipientType' => 'required_if:isParticipant,false|nullable|in:staff,visitor,other',
+    //         'recipientNotes' => 'nullable|string',
+    //         'drugName' => 'required|string|max:255',
+    //         'quantityDispensed' => 'required|integer|min:1',
+    //         'symptoms' => 'nullable|string',
+    //         'instructions' => 'nullable|string',
+    //     ]);
+
+    //     DB::beginTransaction();
+
+    //     try {
+    //         // Check available stock
+    //         $availableStock = DB::table('medication_inventory')
+    //             ->where('drug_name', $validated['drugName'])
+    //             ->where('quantity_remaining', '>', 0)
+    //             ->orderBy('expiry_date', 'asc')
+    //             ->get();
+
+    //         $totalAvailable = $availableStock->sum('quantity_remaining');
+
+    //         if ($totalAvailable < $validated['quantityDispensed']) {
+    //             throw ValidationException::withMessages([
+    //                 'quantity' => ["Insufficient stock. Only {$totalAvailable} units available."]
+    //             ]);
+    //         }
+
+    //         // Get medical info if participant (for warnings/logging)
+    //         $medicalInfo = null;
+    //         if ($validated['isParticipant']) {
+    //             $attendee = Attendee::where('attendeeId', $validated['attendeeId'])->first();
+    //             $medicalInfo = $attendee->medicalInfo;
+    //         }
+
+    //         // Deduct from inventory (FIFO - First to Expire First Out)
+    //         $remainingToDispense = $validated['quantityDispensed'];
+    //         $batchNumbers = [];
+
+    //         foreach ($availableStock as $batch) {
+    //             if ($remainingToDispense <= 0) break;
+
+    //             $quantityFromBatch = min($remainingToDispense, $batch->quantity_remaining);
+                
+    //             DB::table('medication_inventory')
+    //                 ->where('id', $batch->id)
+    //                 ->decrement('quantity_remaining', $quantityFromBatch);
+
+    //             $batchNumbers[] = $batch->batch_number;
+    //             $remainingToDispense -= $quantityFromBatch;
+    //         }
+
+    //         // Create dispensing record
+    //         $dispensing = new MedicationDispensing();
+    //         $dispensing->is_participant = $validated['isParticipant'];
+            
+    //         if ($validated['isParticipant']) {
+    //             $dispensing->attendeeId = $validated['attendeeId'];
+    //         } else {
+    //             $dispensing->recipient_name = $validated['recipientName'];
+    //             $dispensing->recipient_type = $validated['recipientType'];
+    //             $dispensing->recipient_notes = $validated['recipientNotes'] ?? null;
+    //         }
+            
+    //         $dispensing->drug_name = $validated['drugName'];
+    //         $dispensing->quantity_dispensed = $validated['quantityDispensed'];
+    //         $dispensing->symptoms = $validated['symptoms'] ?? null;
+    //         $dispensing->instructions = $validated['instructions'] ?? null;
+    //         $dispensing->batch_number = implode(', ', $batchNumbers);
+    //         $dispensing->dispensed_by = Auth::id();
+    //         $dispensing->dispensed_at = now();
+            
+    //         // Add medical alert flags if participant
+    //         if ($medicalInfo) {
+    //             $dispensing->has_drug_allergy = $medicalInfo->has_drug_allergy;
+    //             $dispensing->is_pregnant = $medicalInfo->is_pregnant;
+    //             $dispensing->has_medical_conditions = $medicalInfo->has_medical_conditions;
+    //         }
+            
+    //         $dispensing->save();
+
+    //         DB::commit();
+
+    //         return response()->json([
+    //             'message' => 'Medication dispensed successfully',
+    //             'dispensing' => $dispensing
+    //         ], 201);
+
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+            
+    //         return response()->json([
+    //             'message' => 'Failed to dispense medication: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
+    /**
+     * Update or create medical information for an attendee
+     */
+    public function updateAttendeeMedicalInfo(Request $request, $attendeeId)
+    {
+        $attendee = Attendee::where('attendeeId', $attendeeId)->first();
+
+        if (!$attendee) {
+            return response()->json([
+                'message' => 'Participant not found'
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'hasAllergy' => 'required|boolean',
+            'allergyDetails' => 'nullable|string',
+            'hasDrugAllergy' => 'required|boolean',
+            'drugAllergyType' => 'nullable|string',
+            'isPregnant' => 'required|boolean',
+            'pregnancyMonths' => 'nullable|string',
+            'isBreastfeeding' => 'required|boolean',
+            'onMedications' => 'required|boolean',
+            'medicationType' => 'nullable|string',
+            'onBirthControl' => 'required|boolean',
+            'hasSurgicalHistory' => 'required|boolean',
+            'surgicalHistoryDetails' => 'nullable|string',
+            'hasMedicalConditions' => 'required|boolean',
+            'medicalConditionsDetails' => 'nullable|string',
+        ]);
+
+        $medicalInfo = ParticipantMedicalInfo::updateOrCreate(
+            ['attendeeId' => $attendeeId],
+            [
+                'has_allergy' => $validated['hasAllergy'],
+                'allergy_details' => $validated['allergyDetails'],
+                'has_drug_allergy' => $validated['hasDrugAllergy'],
+                'drug_allergy_type' => $validated['drugAllergyType'],
+                'is_pregnant' => $validated['isPregnant'],
+                'pregnancy_months' => $validated['pregnancyMonths'],
+                'is_breastfeeding' => $validated['isBreastfeeding'],
+                'on_medications' => $validated['onMedications'],
+                'medication_type' => $validated['medicationType'],
+                'on_birth_control' => $validated['onBirthControl'],
+                'has_surgical_history' => $validated['hasSurgicalHistory'],
+                'surgical_history_details' => $validated['surgicalHistoryDetails'],
+                'has_medical_conditions' => $validated['hasMedicalConditions'],
+                'medical_conditions_details' => $validated['medicalConditionsDetails'],
+            ]
+        );
+
+        return response()->json([
+            'message' => 'Medical information updated successfully',
+            'medicalInfo' => $medicalInfo->toApiResponse()
+        ]);
+    }
 }
+
