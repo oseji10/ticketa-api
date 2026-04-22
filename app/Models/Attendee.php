@@ -101,6 +101,11 @@ public function color()
     return $this->belongsTo(Color::class, 'colorId', 'colorId');
 }
 
+public function colors()
+{
+    return $this->belongsTo(Color::class, 'colorId', 'colorId');
+}
+
 public function subCommunityLead()
 {
     return $this->belongsTo(SubCL::class, 'subClId');
