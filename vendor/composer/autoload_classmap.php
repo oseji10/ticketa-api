@@ -24,6 +24,7 @@ return array(
     'App\\Http\\Controllers\\Api\\IssamCentralDashboardController' => $baseDir . '/app/Http/Controllers/Api/IssamCentralDashboardController.php',
     'App\\Http\\Controllers\\Api\\LiverScreeningController' => $baseDir . '/app/Http/Controllers/Api/LiverScreeningController.php',
     'App\\Http\\Controllers\\Api\\MealController' => $baseDir . '/app/Http/Controllers/Api/MealController.php',
+    'App\\Http\\Controllers\\Api\\MealRatingStatisticsController' => $baseDir . '/app/Http/Controllers/Api/MealRatingStatisticsController.php',
     'App\\Http\\Controllers\\Api\\MealSessionController' => $baseDir . '/app/Http/Controllers/Api/MealSessionController.php',
     'App\\Http\\Controllers\\Api\\MealTicketController' => $baseDir . '/app/Http/Controllers/Api/MealTicketController.php',
     'App\\Http\\Controllers\\Api\\MedicationController' => $baseDir . '/app/Http/Controllers/Api/MedicationController.php',

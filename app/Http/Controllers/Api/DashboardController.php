@@ -222,59 +222,82 @@ class DashboardController extends Controller
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-   protected function buildSupervisorRows(
-    string $selectedDate,
-    int    $eventId,
-    bool   $isScoped   = false,
-    array  $scopedAttendeeIds = []
-): array {
-    // Get all Sub-CL supervisors (users who have a sub_cls record)
-    $allSupervisors = DB::table('sub_cls as sc')
-        ->join('users as u', 'u.id', '=', 'sc.userId')
-        ->select(
-            'u.id as supervisorId',
-            DB::raw("TRIM(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) as supervisorName"),
-            'sc.subClId'
-        )
-        ->get()
-        ->keyBy('supervisorId');
+    protected function buildSupervisorRows(
+        string $selectedDate,
+        int    $eventId,
+        bool   $isScoped   = false,
+        array  $scopedAttendeeIds = []
+    ): array {
+        // Get all Sub-CL supervisors (users who have a sub_cls record)
+        $allSupervisors = DB::table('sub_cls as sc')
+            ->join('users as u', 'u.id', '=', 'sc.userId')
+            ->select(
+                'u.id as supervisorId',
+                DB::raw("TRIM(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) as supervisorName"),
+                'sc.subClId'
+            )
+            ->get()
+            ->keyBy('supervisorId');
 
-    // Get attendance counts for each supervisor on the selected date
-    $attendanceCounts = DB::table('daily_attendances as da')
-        ->join('users as u', 'u.id', '=', 'da.markedBy')
-        ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
-        ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-        ->where('ep.eventId', $eventId)
-        ->whereDate('da.attendanceDate', $selectedDate)
-        ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
-        ->select(
-            'u.id as supervisorId',
-            DB::raw('COUNT(DISTINCT da.attendeeId) as attendanceCount')
-        )
-        ->groupBy('u.id')
-        ->pluck('attendanceCount', 'supervisorId');
+        // Get total participants assigned to each Sub-CL (from attendees table directly)
+        $participantCounts = DB::table('attendees')
+            ->where('isRegistered', 1)
+            ->whereNotNull('subClId')
+            ->when($isScoped, fn ($q) => $q->whereIn('attendeeId', $scopedAttendeeIds))
+            ->select(
+                'subClId',
+                DB::raw('COUNT(*) as totalParticipants')
+            )
+            ->groupBy('subClId')
+            ->pluck('totalParticipants', 'subClId');
 
-    // Combine all supervisors with their attendance counts
-    return $allSupervisors->map(function ($supervisor) use ($attendanceCounts) {
-        $count = (int) ($attendanceCounts[$supervisor->supervisorId] ?? 0);
-        
-        return [
-            'supervisorId'    => $supervisor->supervisorId,
-            'supervisorName'  => $supervisor->supervisorName,
-            'subClId'         => $supervisor->subClId,
-            'attendanceCount' => $count,
-            'status'          => $this->resolveSupervisorStatus($count),
-        ];
-    })
-    ->sortByDesc('attendanceCount')
-    ->values()
-    ->all();
-}
+        // Get attendance counts for each supervisor on the selected date
+        $attendanceCounts = DB::table('daily_attendances as da')
+            ->join('users as u', 'u.id', '=', 'da.markedBy')
+            ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+            ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+            ->where('ep.eventId', $eventId)
+            ->whereDate('da.attendanceDate', $selectedDate)
+            // ->when($isScoped, fn ($q) => $q->whereIn('da.attendeeId', $scopedAttendeeIds))
+            ->select(
+                'u.id as supervisorId',
+                DB::raw('COUNT(DISTINCT da.attendeeId) as attendanceCount')
+            )
+            ->groupBy('u.id')
+            ->pluck('attendanceCount', 'supervisorId');
 
-    protected function resolveSupervisorStatus(int $count): string
+        // Combine all supervisors with their attendance counts and percentages
+        return $allSupervisors->map(function ($supervisor) use ($attendanceCounts, $participantCounts) {
+            $scannedCount = (int) ($attendanceCounts[$supervisor->supervisorId] ?? 0);
+            $totalAssigned = (int) ($participantCounts[$supervisor->subClId] ?? 0);
+            
+            // Calculate percentage (avoid division by zero)
+            $percentage = $totalAssigned > 0 
+                ? round(($scannedCount / $totalAssigned) * 100, 1)
+                : 0;
+            
+            return [
+                'supervisorId'      => $supervisor->supervisorId,
+                'supervisorName'    => $supervisor->supervisorName,
+                'subClId'           => $supervisor->subClId,
+                'attendanceCount'   => $scannedCount,
+                'totalAssigned'     => $totalAssigned,
+                'attendancePercent' => $percentage,
+                'status'            => $this->resolveSupervisorStatus($percentage, $scannedCount),
+            ];
+        })
+        ->sortByDesc('attendancePercent')
+        ->values()
+        ->all();
+    }
+
+    protected function resolveSupervisorStatus(float $percentage, int $count): string
     {
-        if ($count >= 10) return 'High Activity';
-        if ($count >= 5)  return 'Active';
+        // Percentage-based rating for fairness across different Sub-CL sizes
+        // But also require minimum scan count to avoid false positives
+        
+        if ($percentage >= 80 && $count >= 1) return 'High Activity';
+        if ($percentage >= 50 && $count >= 1) return 'Active';
         return 'Low Activity';
     }
 
@@ -322,13 +345,14 @@ class DashboardController extends Controller
     {
         $notes = [];
 
+        // Flag Sub-CLs with low attendance percentage (less than 50%)
         $low = collect($supervisorRows)
-            ->filter(fn ($r) => $r['attendanceCount'] < 5)
+            ->filter(fn ($r) => $r['attendancePercent'] < 50 && $r['totalAssigned'] > 0)
             ->pluck('supervisorName')
             ->all();
 
         if ($low) {
-            $notes[] = 'Low attendance activity on selected date: ' . implode(', ', $low);
+            $notes[] = 'Sub-CLs with low attendance coverage (<50%) on selected date: ' . implode(', ', $low);
         }
 
         if ($openIncidents > 0) {

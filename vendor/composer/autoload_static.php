@@ -724,6 +724,7 @@ class ComposerStaticInitc514d8f7b9fc5970bdd94287905ef584
         'App\\Http\\Controllers\\Api\\IssamCentralDashboardController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/IssamCentralDashboardController.php',
         'App\\Http\\Controllers\\Api\\LiverScreeningController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/LiverScreeningController.php',
         'App\\Http\\Controllers\\Api\\MealController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MealController.php',
+        'App\\Http\\Controllers\\Api\\MealRatingStatisticsController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MealRatingStatisticsController.php',
         'App\\Http\\Controllers\\Api\\MealSessionController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MealSessionController.php',
         'App\\Http\\Controllers\\Api\\MealTicketController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MealTicketController.php',
         'App\\Http\\Controllers\\Api\\MedicationController' => __DIR__ . '/../..' . '/app/Http/Controllers/Api/MedicationController.php',

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany; 
 
 class MealSession extends Model
 {
@@ -54,6 +55,44 @@ public function ratings(): HasMany
 
 
 
+    public function food_supplies(): HasMany
+    {
+        return $this->hasMany(FoodSupply::class, 'mealSessionId', 'mealSessionId');
+    }
+
+    /**
+     * Get the average rating for this meal session
+     */
+    public function getAverageRatingAttribute(): float
+    {
+        return $this->ratings()->avg('rating') ?? 0;
+    }
+
+    /**
+     * Get the total number of ratings for this meal session
+     */
+    public function getTotalRatingsAttribute(): int
+    {
+        return $this->ratings()->count();
+    }
+
+    /**
+     * Scope to get only active meal sessions
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
+    /**
+     * Scope to get rateable meals (completed meals from the last 7 days)
+     */
+    public function scopeRateable($query)
+    {
+        return $query->where('mealDate', '>=', now()->subDays(7))
+                    ->where('mealDate', '<=', now())
+                    ->orderByDesc('mealDate');
+    }
 
 
 // Helper to get inventory summary
@@ -77,3 +116,6 @@ public function getAverageRating(): ?float
 
 
 }
+
+
+

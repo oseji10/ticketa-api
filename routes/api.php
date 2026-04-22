@@ -24,6 +24,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\IssamCentralDashboardController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\FeedbackController;
+use App\Http\Controllers\Api\MealRatingStatisticsController;
 
 
 
@@ -211,7 +212,7 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     // Update attendee medical information
     Route::put('/medications/attendees/{attendeeId}/medical-info', [MedicationController::class, 'updateAttendeeMedicalInfo']);
     
-    
+
     // ==========================================
     // REPORTS (Medical Staff/Admin)
     // ==========================================
@@ -249,6 +250,12 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
         // Get participants for a specific color (with optional Sub-CL filter)
         Route::get('colors/{colorId}/participants', [ColorGroupsController::class, 'getParticipants']);
     
+
+        Route::get('/meals/ratings/statistics', [MealRatingStatisticsController::class, 'statistics']);
+    Route::get('/meals/ratings/statistics/{mealSession}', [MealRatingStatisticsController::class, 'show']);
+    Route::get('/meals/ratings/overall', [MealRatingStatisticsController::class, 'overall']);
+    Route::get('/meals/ratings/export', [MealRatingStatisticsController::class, 'export']);
+
 
 });
 
