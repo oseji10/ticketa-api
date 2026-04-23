@@ -58,11 +58,11 @@ class DailyAttendanceController extends Controller
         if (!$isWithinWindow) {
             return response()->json([
                 'success' => false,
-                'message' => 'Attendance can only be taken between 8:00 AM and 8:50 AM WAT.',
+                'message' => 'Attendance can only be taken between 8:15 AM and 8:59 AM WAT.',
                 'data' => [
                     'status' => 'outside_window',
                     'currentTime' => $now->format('h:i A'),
-                    'allowedWindow' => '8:00 AM - 8:50 AM WAT',
+                    'allowedWindow' => '8:15 AM - 8:59 AM WAT',
                 ],
             ], 422);
         }
