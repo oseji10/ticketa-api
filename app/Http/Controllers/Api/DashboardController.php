@@ -58,14 +58,25 @@ class DashboardController extends Controller
 
         // ── Core counts (scoped to active event) ─────────────────────────────
 
-        $totalParticipants = DB::table('attendees as a')
-            ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
-            ->where('ep.eventId', $eventId)
-            ->where('a.isRegistered', 1)
-            ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
-            ->distinct()
-            ->count('a.attendeeId');
+        // $totalParticipants = DB::table('attendees as a')
+        //     ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
+        //     ->where('ep.eventId', $eventId)
+        //     ->where('a.isRegistered', 1)
+        //     ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
+        //     ->distinct()
+        //     ->count('a.attendeeId');
 
+        $totalParticipants = DB::table('attendees as a')
+    ->whereExists(function ($query) use ($eventId) {
+        $query->select(DB::raw(1))
+            ->from('event_passes as ep')
+            ->whereColumn('ep.attendeeId', 'a.attendeeId')
+            ->where('ep.eventId', $eventId);
+    })
+    ->where('a.isRegistered', 1)
+    ->when($isScoped, fn ($q) => $q->whereIn('a.attendeeId', $scopedAttendeeIds))
+    ->count();
+    
         $presentForDate = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
             ->join('event_passes as ep', 'ep.attendeeId', '=', 'a.attendeeId')
