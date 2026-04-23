@@ -432,7 +432,8 @@ public function attendanceTrend(Request $request): JsonResponse
                 'a.phone',
                 'a.gender',
                 'ep.serialNumber',
-                'a.photoUrl'
+                'a.photoUrl',
+                'a.lga'
             )
             ->where('a.isRegistered', 1)
             ->where('a.eventId', $activeEvent->eventId)
@@ -452,6 +453,7 @@ public function attendanceTrend(Request $request): JsonResponse
                 ['key' => 'fullName', 'label' => 'Full Name'],
                 ['key' => 'phone', 'label' => 'Phone Number'],
                 ['key' => 'gender', 'label' => 'Gender'],
+                ['key' => 'lga', 'label' => 'LGA'],
                 ['key' => 'serialNumber', 'label' => 'Serial Number'],
             ],
             'rows' => $rows,
@@ -462,6 +464,7 @@ public function attendanceTrend(Request $request): JsonResponse
     {
         $rows = DB::table('daily_attendances as da')
             ->join('attendees as a', 'a.attendeeId', '=', 'da.attendeeId')
+            ->join('colors as c', 'c.colorId', '=', 'a.colorId')
             ->join('event_passes as ep', 'ep.passId', '=', 'da.eventPassId')
             ->leftJoin('users as u', 'u.id', '=', 'da.markedBy')
             ->select(
