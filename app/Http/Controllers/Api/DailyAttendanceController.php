@@ -52,7 +52,8 @@ class DailyAttendanceController extends Controller
         $currentMinute = $now->minute;
         
         // Check if current time is between 8:00 AM and 8:50 AM
-        $isWithinWindow = ($currentHour === 8 && $currentMinute <= 50);
+        // $isWithinWindow = ($currentHour === 8 && $currentMinute <= 50);
+        $isWithinWindow = ($currentHour === 8 && $currentMinute >= 15 && $currentMinute <= 59);
         
         if (!$isWithinWindow) {
             return response()->json([
