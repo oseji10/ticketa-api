@@ -153,7 +153,7 @@ class IncidentController extends Controller
                 WHEN 'medium' THEN 3
                 ELSE 4
             END")
-            ->latest('reportedAt')
+            ->latest('incidentId')
             ->get()
             ->map(fn ($incident) => $this->formatIncident($incident))
             ->values();

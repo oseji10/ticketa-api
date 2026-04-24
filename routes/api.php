@@ -25,7 +25,8 @@ use App\Http\Controllers\Api\IssamCentralDashboardController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\FeedbackController;
 use App\Http\Controllers\Api\MealRatingStatisticsController;
-
+use App\Http\Controllers\Api\RoomController;
+use App\Http\Controllers\Api\AttendeeController;
 
 
 Route::prefix('auth')->group(function () {
@@ -256,6 +257,20 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     Route::get('/meals/ratings/overall', [MealRatingStatisticsController::class, 'overall']);
     Route::get('/meals/ratings/export', [MealRatingStatisticsController::class, 'export']);
 
+
+    Route::get('/incidents', [IncidentController::class, 'index']);
+    Route::post('/incidents', [IncidentController::class, 'store']);
+    Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
+    Route::patch('/incidents/{incident}/status', [IncidentController::class, 'updateStatus']);
+    Route::patch('/incidents/{incident}/assign', [IncidentController::class, 'assign']);
+    Route::patch('/incidents/{incident}/resolve', [IncidentController::class, 'resolve']);
+    Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
+    
+    // Attendee routes - returns attendees from active event
+    Route::get('/attendees', [AttendeeController::class, 'index']);
+    
+    // Room routes - returns rooms from active event
+    Route::get('/rooms', [RoomController::class, 'index']);
 
 });
 
