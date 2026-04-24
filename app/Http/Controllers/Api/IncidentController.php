@@ -81,16 +81,17 @@ class IncidentController extends Controller
         ];
     }
 
-    public function index(Request $request, Event $event): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-                 $activeEvent = Event::where('status', 'active')->first();
+        $activeEvent = Event::where('status', 'active')->first();
 
-    if (!$activeEvent) {
-        return response()->json([
-            'success' => false,
-            'message' => 'No active event found.',
-        ], 404);
-    }
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
         $this->ensureIncidentAccess();
 
         $search = trim((string) $request->query('search', ''));
@@ -164,16 +165,17 @@ class IncidentController extends Controller
         ]);
     }
 
-    public function store(Request $request, Event $event): JsonResponse
+    public function store(Request $request): JsonResponse
     {
-         $activeEvent = Event::where('status', 'active')->first();
+        $activeEvent = Event::where('status', 'active')->first();
 
-    if (!$activeEvent) {
-        return response()->json([
-            'success' => false,
-            'message' => 'No active event found.',
-        ], 404);
-    }
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
         $this->ensureIncidentAccess();
 
         $validated = $request->validate([
@@ -195,10 +197,10 @@ class IncidentController extends Controller
             'isAnonymous' => ['nullable', 'boolean'],
         ]);
 
-        return DB::transaction(function () use ($validated, $event) {
+        return DB::transaction(function () use ($validated, $activeEvent) {
             if (!empty($validated['attendeeId'])) {
                 $attendee = Attendee::findOrFail($validated['attendeeId']);
-                if ((int) $attendee->eventId !== (int) $event->eventId) {
+                if ((int) $attendee->eventId !== (int) $activeEvent->eventId) {
                     throw ValidationException::withMessages([
                         'attendeeId' => ['Selected attendee does not belong to this event.'],
                     ]);
@@ -207,7 +209,7 @@ class IncidentController extends Controller
 
             if (!empty($validated['roomId'])) {
                 $room = Room::findOrFail($validated['roomId']);
-                if ((int) $room->eventId !== (int) $event->eventId) {
+                if ((int) $room->eventId !== (int) $activeEvent->eventId) {
                     throw ValidationException::withMessages([
                         'roomId' => ['Selected room does not belong to this event.'],
                     ]);
@@ -250,14 +252,23 @@ class IncidentController extends Controller
         });
     }
 
-    public function show(Event $event, Incident $incident): JsonResponse
+    public function show(Incident $incident): JsonResponse
     {
-        $this->ensureIncidentAccess();
+        $activeEvent = Event::where('status', 'active')->first();
 
-        if ((int) $incident->eventId !== (int) $event->eventId) {
+        if (!$activeEvent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Incident does not belong to this event.',
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $this->ensureIncidentAccess();
+
+        if ((int) $incident->eventId !== (int) $activeEvent->eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incident does not belong to the active event.',
             ], 404);
         }
 
@@ -296,14 +307,23 @@ class IncidentController extends Controller
         ]);
     }
 
-    public function updateStatus(Request $request, Event $event, Incident $incident): JsonResponse
+    public function updateStatus(Request $request, Incident $incident): JsonResponse
     {
-        $this->ensureIncidentAccess();
+        $activeEvent = Event::where('status', 'active')->first();
 
-        if ((int) $incident->eventId !== (int) $event->eventId) {
+        if (!$activeEvent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Incident does not belong to this event.',
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $this->ensureIncidentAccess();
+
+        if ((int) $incident->eventId !== (int) $activeEvent->eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incident does not belong to the active event.',
             ], 404);
         }
 
@@ -349,14 +369,23 @@ class IncidentController extends Controller
         });
     }
 
-    public function assign(Request $request, Event $event, Incident $incident): JsonResponse
+    public function assign(Request $request, Incident $incident): JsonResponse
     {
-        $this->ensureIncidentAccess();
+        $activeEvent = Event::where('status', 'active')->first();
 
-        if ((int) $incident->eventId !== (int) $event->eventId) {
+        if (!$activeEvent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Incident does not belong to this event.',
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $this->ensureIncidentAccess();
+
+        if ((int) $incident->eventId !== (int) $activeEvent->eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incident does not belong to the active event.',
             ], 404);
         }
 
@@ -387,14 +416,23 @@ class IncidentController extends Controller
         });
     }
 
-    public function resolve(Request $request, Event $event, Incident $incident): JsonResponse
+    public function resolve(Request $request, Incident $incident): JsonResponse
     {
-        $this->ensureIncidentAccess();
+        $activeEvent = Event::where('status', 'active')->first();
 
-        if ((int) $incident->eventId !== (int) $event->eventId) {
+        if (!$activeEvent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Incident does not belong to this event.',
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $this->ensureIncidentAccess();
+
+        if ((int) $incident->eventId !== (int) $activeEvent->eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incident does not belong to the active event.',
             ], 404);
         }
 
@@ -429,14 +467,23 @@ class IncidentController extends Controller
         });
     }
 
-    public function addUpdate(Request $request, Event $event, Incident $incident): JsonResponse
+    public function addUpdate(Request $request, Incident $incident): JsonResponse
     {
-        $this->ensureIncidentAccess();
+        $activeEvent = Event::where('status', 'active')->first();
 
-        if ((int) $incident->eventId !== (int) $event->eventId) {
+        if (!$activeEvent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Incident does not belong to this event.',
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $this->ensureIncidentAccess();
+
+        if ((int) $incident->eventId !== (int) $activeEvent->eventId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Incident does not belong to the active event.',
             ], 404);
         }
 
