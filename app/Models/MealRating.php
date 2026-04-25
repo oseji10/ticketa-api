@@ -16,6 +16,7 @@ class MealRating extends Model
         'rating',
         'comment',
         'deviceFingerprint',
+        'eventId',
     ];
 
     protected $casts = [
