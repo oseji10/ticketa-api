@@ -222,10 +222,10 @@ $attendee = Attendee::where('eventId', $eventId)
                     'exitLogId' => $log->exitLogId,
                     'attendee' => [
                         // 'id' => $log->attendee->attendeeId,
-                        'attendeeId' => $log->attendee->attendeeId,
+                        'attendeeId' => $log->attendee->uniqueId,
                         'fullName' => $log->attendee->fullName,
                         'photo' => $log->attendee->photoUrl,
-                        'phoneNumber' => $log->attendee->phoneNumber,
+                        'phoneNumber' => $log->attendee->phone,
                     ],
                     'reason' => $log->reason,
                     'additionalNotes' => $log->additionalNotes,
