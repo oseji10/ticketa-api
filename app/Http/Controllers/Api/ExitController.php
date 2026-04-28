@@ -212,7 +212,7 @@ $attendee = Attendee::where('eventId', $eventId)
         $currentlyOut = ExitLog::where('eventId', $eventId)
             ->where('status', 'out')
             ->whereNull('returnTime')
-            ->with(['attendee', 'recorder'])
+            ->with(['attendee', 'recorder', 'attendee.subcl.user', 'attendee.colors'])
             ->orderBy('exitTime', 'asc') // Oldest exits first
             ->get()
             ->map(function ($log) {
@@ -226,6 +226,8 @@ $attendee = Attendee::where('eventId', $eventId)
                         'fullName' => $log->attendee->fullName,
                         'photo' => $log->attendee->photoUrl,
                         'phoneNumber' => $log->attendee->phone,
+                        'subclName' => $log->attendee->subcl->user->firstName . ' ' . $log->attendee->subcl->user->lastName,
+                        'color' => $log->attendee->colors->colorName,
                     ],
                     'reason' => $log->reason,
                     'additionalNotes' => $log->additionalNotes,
