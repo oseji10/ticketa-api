@@ -21,7 +21,8 @@ return [
 
     'allowed_origins' => [
     'https://ticketa.gradelytics.com.ng',
-    'http://localhost:3000', // Keep for local dev
+    'http://localhost:3001', // Keep for local dev
+    'http://localhost:3000', 
 ],
 
 
