@@ -227,7 +227,7 @@ $attendee = Attendee::where('eventId', $eventId)
                         'photo' => $log->attendee->photoUrl,
                         'phoneNumber' => $log->attendee->phone,
                         'subclName' => $log->attendee->subcl->user->firstName . ' ' . $log->attendee->subcl->user->lastName,
-                        'color' => $log->attendee->colors->colorName,
+                        'color' => $log->attendee->colors?->colorName,
                     ],
                     'reason' => $log->reason,
                     'additionalNotes' => $log->additionalNotes,
