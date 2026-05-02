@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Sub Community Lead Tags</title>
+    <title>Event Passes</title>
 
     <style>
         @page {
@@ -52,9 +52,26 @@
             line-height: 1.5;
         }
 
+        /* 🔥 QR (no container, but safe padding) */
+        .qr-box {
+            margin: 0 auto 10px auto;
+            text-align: center;
+        }
+
+        .qr-box img {
+            width: 220px;
+            height: 220px;
+            display: block;
+            margin: 0 auto;
+            padding: 8px;              /* IMPORTANT: quiet zone */
+            background: #ffffff;       /* keeps scanning reliable */
+            border-radius: 6px;
+        }
+
+        /* 🔥 FRONT DESIGN - BIGGER WHITE BOX */
         .front-box {
             width: 280px;
-            height: 320px;
+            height: 280px;
             margin: 0 auto 10px auto;
             box-sizing: border-box;
             border-radius: 10px;
@@ -70,6 +87,7 @@
             padding: 16px 14px;
         }
 
+        /* 🔥 LOGO (no oval, bigger) */
         .front-logo-wrap {
             margin: 0 auto 12px auto;
             text-align: center;
@@ -82,11 +100,11 @@
         }
 
         .front-main-title {
-            font-size: 22px;
+            font-size: 20px;
             font-weight: bold;
             text-transform: uppercase;
             line-height: 1.2;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .front-subtitle {
@@ -95,6 +113,7 @@
             margin-bottom: 14px;
         }
 
+        /* 🔥 WHITE NAME BOX - BIGGER FOR MANUAL WRITING */
         .name-write-box {
             background: #ffffff;
             color: #000000;
@@ -116,11 +135,22 @@
             letter-spacing: 0.4px;
         }
 
-        .color-label {
+        .serial {
             margin-top: 8px;
-            font-size: 16px;
+            font-size: 42px;
             font-weight: bold;
+        }
+
+        .pass-label {
+            font-size: 10px;
+            margin-top: 4px;
             text-transform: uppercase;
+        }
+
+        .note {
+            margin-top: 10px;
+            font-size: 9px;
+            line-height: 1.5;
         }
 
         .page-break {
@@ -131,45 +161,90 @@
 <body>
 
 @php
-    // Define the 8 colors
-    $colors = [
-        ['name' => 'Red', 'bg' => '#EF4444', 'text' => '#FFFFFF'],
-        ['name' => 'Purple', 'bg' => '#8B5CF6', 'text' => '#FFFFFF'],
-        ['name' => 'Green', 'bg' => '#22C55E', 'text' => '#FFFFFF'],
-        ['name' => 'Blue', 'bg' => '#3B82F6', 'text' => '#FFFFFF'],
-        ['name' => 'Yellow', 'bg' => '#FACC15', 'text' => '#000000'],
-        ['name' => 'Pink', 'bg' => '#EC4899', 'text' => '#FFFFFF'],
-        ['name' => 'Orange', 'bg' => '#F59E0B', 'text' => '#000000'],
-        ['name' => 'Brown', 'bg' => '#964B00', 'text' => '#FFFFFF'],
-    ];
-
+    $passRows = $passes->chunk(2);
     $logoPath = public_path('storage/images/wima-base.png');
-    
-    // Create 3 sub community leads per color
-    $allTags = [];
-    foreach ($colors as $color) {
-        for ($i = 1; $i <= 3; $i++) {
-            $allTags[] = $color;
-        }
-    }
-    
-    // Chunk into pairs for table layout (2 tags per row)
-    $tagPairs = array_chunk($allTags, 2);
 @endphp
 
-@foreach($tagPairs as $pairIndex => $pair)
+@foreach($passRows as $row)
     <table class="passes-table">
-        <tr>
-            @foreach($pair as $tagIndex => $color)
+        @foreach($row as $pass)
+
+                @php
+                // Extract numeric part from serial number
+                $rawSerial = (string) ($pass->serialNumber ?? '');
+                preg_match('/(\d+)$/', $rawSerial, $matches);
+                $serial = isset($matches[1]) ? (int) $matches[1] : 0;
+
+                // Color allocation: 36 per color, 8 colors total (288 participants)
+                // After 288, use last color (brown)
+                if ($serial >= 1 && $serial <= 36) {
+                    // Color 1: Red
+                    $bg = '#EF4444'; $text = '#FFFFFF';
+                } elseif ($serial >= 37 && $serial <= 72) {
+                    // Color 2: Purple
+                    $bg = '#8B5CF6'; $text = '#FFFFFF';
+                } elseif ($serial >= 73 && $serial <= 108) {
+                    // Color 3: Green
+                    $bg = '#22C55E'; $text = '#FFFFFF';
+                } elseif ($serial >= 109 && $serial <= 144) {
+                    // Color 4: Blue
+                    $bg = '#3B82F6'; $text = '#FFFFFF';
+                } elseif ($serial >= 145 && $serial <= 180) {
+                    // Color 5: Yellow
+                    $bg = '#FACC15'; $text = '#000000';
+                } elseif ($serial >= 181 && $serial <= 216) {
+                    // Color 6: Pink
+                    $bg = '#EC4899'; $text = '#FFFFFF';
+                } elseif ($serial >= 217 && $serial <= 252) {
+                    // Color 7: Orange
+                    $bg = '#F59E0B'; $text = '#000000';
+                } elseif ($serial >= 253 && $serial <= 288) {
+                    // Color 8: Red
+                    $bg = '#964B00'; $text = '#FFFFFF';
+                } else {
+                    // After 288, use last color (Red)
+                    $bg = '#964B00'; $text = '#FFFFFF';
+                }
+            @endphp
+            <tr>
+
+                <!-- LEFT: QR SIDE -->
                 <td>
-                    <div class="ticket" style="background-color: {{ $color['bg'] }}; color: {{ $color['text'] }};">
-                        
+                    <div class="ticket" style="background-color: {{ $bg }}; color: {{ $text }};">
                         <div class="event-title">
-                            {{ $event->title ?? 'EVENT TITLE' }}
+                        {{ $event->title }}
                         </div>
 
                         <div class="event-meta">
-                            {{ $event->startDate ?? 'START DATE' }} - {{ $event->endDate ?? 'END DATE' }}<br>
+                            {{ $event->startDate }} - {{ $event->endDate }}<br>
+                            <!-- {{ $event->location ?? '' }} -->
+                        </div>
+
+                        <div class="qr-box">
+                            <img src="{{ public_path('storage/' . $pass->qrPath) }}">
+                        </div>
+
+                        <div class="serial">
+                            {{ $pass->serialNumber }}
+                        </div>
+
+                        <div class="note">
+                            Present this QR code at check-in
+                        </div>
+                    </div>
+                </td>
+
+                <!-- RIGHT: FRONT SIDE -->
+                <td>
+                    <div class="ticket" style="background-color: {{ $bg }}; color: {{ $text }};">
+
+                        <div class="event-title">
+                            {{ $event->title ?? '' }}
+                        </div>
+
+                        <div class="event-meta">
+                            {{ $event->startDate }} - {{ $event->endDate }}<br>
+                            <!-- {{ $event->location ?? '' }} -->
                         </div>
 
                         <div class="front-box">
@@ -180,35 +255,30 @@
                                 </div>
 
                                 <div class="front-main-title">
-                                    Sub Community Lead
+                                    Programme Access Tag
                                 </div>
 
-                                <!-- <div class="name-write-box">
+                                <!-- 🔥 WHITE BOX FOR MANUAL NAME WRITING (No Serial Number) -->
+                                <div class="name-write-box">
                                     (Write participant name here)
-                                </div> -->
-
-                                <div class="color-label">
-                                    {{ $color['name'] }} Team
                                 </div>
 
-                                <!-- <div class="front-footer">
+                                <div class="front-footer">
                                     Valid for accredited participant use only
-                                </div> -->
+                                </div>
 
                             </div>
                         </div>
 
                     </div>
                 </td>
-            @endforeach
-            
-            @if(count($pair) < 2)
-                <td></td>
-            @endif
-        </tr>
+
+            </tr>
+
+        @endforeach
     </table>
 
-    @if($pairIndex < count($tagPairs) - 1)
+    @if(!$loop->last)
         <div class="page-break"></div>
     @endif
 @endforeach
