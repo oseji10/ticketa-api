@@ -192,15 +192,7 @@
                 } elseif ($serial >= 137 && $serial <= 170) {
                     // Color 5: Yellow
                     $bg = '#FACC15'; $text = '#000000';
-                <!-- } elseif ($serial >= 171 && $serial <= 204) {
-                    // Color 6: Pink
-                    $bg = '#EC4899'; $text = '#FFFFFF';
-                } elseif ($serial >= 217 && $serial <= 252) {
-                    // Color 7: Orange
-                    $bg = '#F59E0B'; $text = '#000000';
-                } elseif ($serial >= 253 && $serial <= 288) {
-                    // Color 8: Red
-                    $bg = '#964B00'; $text = '#FFFFFF'; -->
+            
                 } else {
                     // After 288, use last color (Red)
                     $bg = '#964B00'; $text = '#FFFFFF';
