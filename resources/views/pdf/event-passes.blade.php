@@ -169,35 +169,33 @@
     <table class="passes-table">
         @foreach($row as $pass)
 
-                @php
-                // Extract numeric part from serial number
-                $rawSerial = (string) ($pass->serialNumber ?? '');
-                preg_match('/(\d+)$/', $rawSerial, $matches);
-                $serial = isset($matches[1]) ? (int) $matches[1] : 0;
+              @php
+    // Extract numeric part from serial number
+    $rawSerial = (string) ($pass->serialNumber ?? '');
+    preg_match('/(\d+)$/', $rawSerial, $matches);
+    $serial = isset($matches[1]) ? (int) $matches[1] : 0;
 
-                // Color allocation: 36 per color, 8 colors total (288 participants)
-                // After 288, use last color (brown)
-                if ($serial >= 1 && $serial <= 33) {
-                    // Color 1: Red
-                    $bg = '#EF4444'; $text = '#FFFFFF';
-                } elseif ($serial >= 34 && $serial <= 67) {
-                    // Color 2: Purple
-                    $bg = '#8B5CF6'; $text = '#FFFFFF';
-                } elseif ($serial >= 68 && $serial <= 102) {
-                    // Color 3: Green
-                    $bg = '#22C55E'; $text = '#FFFFFF';
-                } elseif ($serial >= 103 && $serial <= 136) {
-                    // Color 4: Blue
-                    $bg = '#3B82F6'; $text = '#FFFFFF';
-                } elseif ($serial >= 137 && $serial <= 170) {
-                    // Color 5: Yellow
-                    $bg = '#FACC15'; $text = '#000000';
-            
-                } else {
-                    // After 288, use last color (Red)
-                    $bg = '#964B00'; $text = '#FFFFFF';
-                }
-            @endphp
+    // Color allocation: 33 per color
+    if ($serial >= 1 && $serial <= 33) {
+        // Color 1: Red (1-33)
+        $bg = '#EF4444'; $text = '#FFFFFF';
+    } elseif ($serial >= 34 && $serial <= 66) {
+        // Color 2: Purple (34-66)
+        $bg = '#8B5CF6'; $text = '#FFFFFF';
+    } elseif ($serial >= 67 && $serial <= 99) {
+        // Color 3: Green (67-99)
+        $bg = '#22C55E'; $text = '#FFFFFF';
+    } elseif ($serial >= 100 && $serial <= 132) {
+        // Color 4: Blue (100-132)
+        $bg = '#3B82F6'; $text = '#FFFFFF';
+    } elseif ($serial >= 133 && $serial <= 165) {
+        // Color 5: Yellow (133-165)
+        $bg = '#FACC15'; $text = '#000000';
+    } else {
+        // After 165, use brown
+        $bg = '#964B00'; $text = '#FFFFFF';
+    }
+@endphp
             <tr>
 
                 <!-- LEFT: QR SIDE -->
