@@ -28,10 +28,7 @@ class FeedbackController extends Controller
         ]);
 
         // ── Resolve active event ──────────────────────────────────────────────
-        $activeEvent = DB::table('events')
-            ->where('status', 'active')
-            ->orderByDesc('created_at')   // if multiple active, take the latest
-            ->first();
+        $activeEvent = $this->getActiveEvent();
 
         if (!$activeEvent) {
             return response()->json([
@@ -85,9 +82,7 @@ class FeedbackController extends Controller
                 'contributed_to_learning' => $validated['contributedToLearning'],
                 'would_participate_again' => $validated['wouldParticipateAgain'],
                 'ip_address'              => $request->ip(),
-
-                'eventId'              => $eventId,
-
+                'eventId'                 => $eventId,
             ]);
 
             foreach ($staffInput as $staffId => $rating) {
@@ -124,12 +119,27 @@ class FeedbackController extends Controller
 
     public function summary(): JsonResponse
     {
+        $activeEvent = $this->getActiveEvent();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
+        }
+
+        $eventId = $activeEvent->eventId ?? $activeEvent->id;
+
         return response()->json([
             'success' => true,
             'data'    => [
-                'general'  => $this->buildGeneralSummary(),
-                'staff'    => $this->buildStaffSummary(),
-                'comments' => $this->buildAllComments(),
+                'event'    => [
+                    'id'   => $eventId,
+                    'name' => $activeEvent->name ?? 'ISSAM Residential Training',
+                ],
+                'general'  => $this->buildGeneralSummary($eventId),
+                'staff'    => $this->buildStaffSummary($eventId),
+                'comments' => $this->buildAllComments($eventId),
             ],
         ]);
     }
@@ -138,11 +148,21 @@ class FeedbackController extends Controller
 
     public function downloadPdf(): Response
     {
-        $general  = $this->buildGeneralSummary();
-        $staff    = $this->buildStaffSummary();
-        $comments = $this->buildAllComments();
+        $activeEvent = $this->getActiveEvent();
+
+        if (!$activeEvent) {
+            return response('No active event found.', 404);
+        }
+
+        $eventId      = $activeEvent->eventId ?? $activeEvent->id;
+        $eventName    = $activeEvent->name ?? 'ISSAM Residential Training';
+        
+        $general  = $this->buildGeneralSummary($eventId);
+        $staff    = $this->buildStaffSummary($eventId);
+        $comments = $this->buildAllComments($eventId);
+        
         $html     = $this->buildReportHtml(
-            'ISSAM Residential Training',
+            $eventName,
             now()->format('d M Y, H:i'),
             $general,
             $staff,
@@ -164,9 +184,10 @@ class FeedbackController extends Controller
 
     // ── Private — data builders ───────────────────────────────────────────────
 
-    private function buildGeneralSummary(): object
+    private function buildGeneralSummary(int $eventId): object
     {
         return DB::table('feedback_submissions')
+            ->where('eventId', $eventId)
             ->select(
                 DB::raw('COUNT(*) as totalSubmissions'),
                 DB::raw('ROUND(AVG(overall_rating), 2) as avgOverallRating'),
@@ -185,12 +206,13 @@ class FeedbackController extends Controller
             ->first();
     }
 
-    private function buildStaffSummary(): \Illuminate\Support\Collection
+    private function buildStaffSummary(int $eventId): \Illuminate\Support\Collection
     {
-        
         return DB::table('feedback_staff_ratings as fsr')
+            ->join('feedback_submissions as fs', 'fs.id', '=', 'fsr.feedback_submission_id')
             ->join('users as u', 'u.id', '=', 'fsr.staff_id')
             ->join('roles as r', 'r.roleId', '=', 'u.role')
+            ->where('fs.eventId', $eventId)
             ->select(
                 'u.id as userId',
                 DB::raw("TRIM(CONCAT(COALESCE(u.firstName,''), ' ', COALESCE(u.lastName,''))) as name"),
@@ -205,11 +227,13 @@ class FeedbackController extends Controller
             ->get();
     }
 
-    private function buildAllComments(): array
+    private function buildAllComments(int $eventId): array
     {
         $rows = DB::table('feedback_staff_ratings as fsr')
+            ->join('feedback_submissions as fs', 'fs.id', '=', 'fsr.feedback_submission_id')
             ->join('users as u', 'u.id', '=', 'fsr.staff_id')
             ->join('roles as r', 'r.roleId', '=', 'u.role')
+            ->where('fs.eventId', $eventId)
             ->where(function ($q) {
                 $q->whereNotNull('fsr.strength')
                   ->orWhereNotNull('fsr.improvement');
@@ -236,7 +260,6 @@ class FeedbackController extends Controller
                     'name'     => $row->name,
                     'role'     => $row->role,
                     'image'    => $row->image,
-
                     'comments' => [],
                 ];
             }
@@ -455,12 +478,19 @@ HTML;
 
     // ── Private — helpers ─────────────────────────────────────────────────────
 
+    private function getActiveEvent(): ?object
+    {
+        return DB::table('events')
+            ->where('status', 'active')
+            ->orderByDesc('created_at')
+            ->first();
+    }
+
     private function resolveValidStaffUserIds(): array
     {
         $roles = DB::table('roles')
             ->whereNotNull('table_name')
             ->where('table_name', '!=', '')
-            // ->whereIn('slug', ['cl', 'subcl'])
             ->get();
 
         if ($roles->isEmpty()) return [];

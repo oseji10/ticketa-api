@@ -20,7 +20,7 @@ return [
     'allowed_methods' => ['*'],
 
     'allowed_origins' => [
-    'https://ticketa.gradelytics.com.ng',
+    'https://app.ticketa.com.ng',
     'http://localhost:3001', // Keep for local dev
     'http://localhost:3000', 
 ],
