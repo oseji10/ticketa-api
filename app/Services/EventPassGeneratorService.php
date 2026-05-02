@@ -23,7 +23,7 @@ class EventPassGeneratorService
                     'eventId' => $event->eventId,
                     'passCode' => bin2hex(random_bytes(16)),
                     'serialNumber' => strtoupper(
-                        'WMA-' . str_pad((string) ($existingCount + $i + 1), 6, '0', STR_PAD_LEFT)
+                        'WA03-' . str_pad((string) ($existingCount + $i + 1), 4, '0', STR_PAD_LEFT)
                     ),
                     'status' => 'active',
                 ]);
