@@ -177,22 +177,22 @@
 
                 // Color allocation: 36 per color, 8 colors total (288 participants)
                 // After 288, use last color (brown)
-                if ($serial >= 1 && $serial <= 36) {
+                if ($serial >= 1 && $serial <= 33) {
                     // Color 1: Red
                     $bg = '#EF4444'; $text = '#FFFFFF';
-                } elseif ($serial >= 37 && $serial <= 72) {
+                } elseif ($serial >= 34 && $serial <= 67) {
                     // Color 2: Purple
                     $bg = '#8B5CF6'; $text = '#FFFFFF';
-                } elseif ($serial >= 73 && $serial <= 108) {
+                } elseif ($serial >= 68 && $serial <= 102) {
                     // Color 3: Green
                     $bg = '#22C55E'; $text = '#FFFFFF';
-                } elseif ($serial >= 109 && $serial <= 144) {
+                } elseif ($serial >= 103 && $serial <= 136) {
                     // Color 4: Blue
                     $bg = '#3B82F6'; $text = '#FFFFFF';
-                } elseif ($serial >= 145 && $serial <= 180) {
+                } elseif ($serial >= 137 && $serial <= 170) {
                     // Color 5: Yellow
                     $bg = '#FACC15'; $text = '#000000';
-                } elseif ($serial >= 181 && $serial <= 216) {
+                <!-- } elseif ($serial >= 171 && $serial <= 204) {
                     // Color 6: Pink
                     $bg = '#EC4899'; $text = '#FFFFFF';
                 } elseif ($serial >= 217 && $serial <= 252) {
@@ -200,7 +200,7 @@
                     $bg = '#F59E0B'; $text = '#000000';
                 } elseif ($serial >= 253 && $serial <= 288) {
                     // Color 8: Red
-                    $bg = '#964B00'; $text = '#FFFFFF';
+                    $bg = '#964B00'; $text = '#FFFFFF'; -->
                 } else {
                     // After 288, use last color (Red)
                     $bg = '#964B00'; $text = '#FFFFFF';
