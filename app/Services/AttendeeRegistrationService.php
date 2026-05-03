@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendee;
 use App\Models\EventPass;
 use App\Models\Color;
+use App\Models\Event;
 use App\Models\SubCL;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -84,65 +85,119 @@ class AttendeeRegistrationService
     /**
      * Assign an available color and subcommunity leader to the attendee
      */
-    private function assignColorAndSubCL(int $eventId): ?array
-    {
+    // private function assignColorAndSubCL(int $eventId): ?array
+    // {
         
-        // Get all colors with their capacity and current participant count
-        $colors = Color::where('eventId', $eventId)
-            ->withCount(['attendees as current_count' => function ($query) {
-                $query->where('isRegistered', true);
-            }])
-            ->having('current_count', '<', DB::raw('capacity'))
-            ->orderBy('current_count', 'asc')
-            ->get();
+    //     // Get all colors with their capacity and current participant count
+    //     $colors = Color::where('eventId', $eventId)
+    //         ->withCount(['attendees as current_count' => function ($query) {
+    //             $query->where('isRegistered', true);
+    //         }])
+    //         ->having('current_count', '<', DB::raw('capacity'))
+    //         ->orderBy('current_count', 'asc')
+    //         ->get();
 
-        if ($colors->isEmpty()) {
-            return null;
+    //     if ($colors->isEmpty()) {
+    //         return null;
+    //     }
+
+    //     // Get the color with the least participants
+    //     $selectedColor = $colors->first();
+
+    //     // Get subcommunity leaders for this color with their current participant count
+    //     $subCLs = SubCL::where('colorId', $selectedColor->colorId)
+    //         ->where('eventId', $eventId)
+    //         ->withCount(['attendees as current_count' => function ($query) {
+    //             $query->where('isRegistered', true);
+    //         }])
+    //         ->having('current_count', '<', 13) // Each subCL manages max 13 participants
+    //         ->orderBy('current_count', 'asc')
+    //         ->get();
+
+    //     if ($subCLs->isEmpty()) {
+    //         // No available subCL in this color, try next color
+    //         $colors = $colors->skip(1);
+    //         if ($colors->isEmpty()) {
+    //             return null;
+    //         }
+            
+    //         $selectedColor = $colors->first();
+    //         $subCLs = SubCL::where('colorId', $selectedColor->colorId)
+    //             ->where('eventId', $eventId)
+    //             ->withCount(['attendees as current_count' => function ($query) {
+    //                 $query->where('isRegistered', true);
+    //             }])
+    //             ->having('current_count', '<', 13)
+    //             ->orderBy('current_count', 'asc')
+    //             ->get();
+
+    //         if ($subCLs->isEmpty()) {
+    //             return null;
+    //         }
+    //     }
+
+    //     // Get the subCL with the least participants
+    //     $selectedSubCL = $subCLs->first();
+
+    //     return [
+    //         'colorId' => $selectedColor->colorId,
+    //         'color' => $selectedColor,
+    //         'subCLId' => $selectedSubCL->subClId,
+    //         'subCL' => $selectedSubCL,
+    //     ];
+    // }
+
+
+private function assignColorAndSubCL()
+{
+    $activeEvent = Event::where('status', 'active')->first();
+
+        if (!$activeEvent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active event found.',
+            ], 404);
         }
+        $eventId = $activeEvent->eventId;
+    // Get all colors for this event ordered by ID (or any consistent order)
+    $colors = Color::where('eventId', $eventId)
+        ->withCount(['attendees as current_count' => function ($query) {
+            $query->where('isRegistered', true);
+        }])
+        ->having('current_count', '<', DB::raw('capacity'))
+        ->orderBy('colorId', 'asc') // Consistent ordering
+        ->get();
 
-        // Get the color with the least participants
-        $selectedColor = $colors->first();
+    if ($colors->isEmpty()) {
+        return null;
+    }
 
-        // Get subcommunity leaders for this color with their current participant count
-        $subCLs = SubCL::where('colorId', $selectedColor->colorId)
+    // Try each color in order until we find one with available subCL capacity
+    foreach ($colors as $color) {
+        // Get available subCLs for this color
+        $subCLs = SubCL::where('colorId', $color->colorId)
             ->where('eventId', $eventId)
             ->withCount(['attendees as current_count' => function ($query) {
                 $query->where('isRegistered', true);
             }])
-            ->having('current_count', '<', 13) // Each subCL manages max 13 participants
-            ->orderBy('current_count', 'asc')
+            ->having('current_count', '<', DB::raw('maxCapacity')) // Use dynamic maxCapacity from SubCL table
+            ->orderBy('subClId', 'asc') // Fill subCLs in order
             ->get();
 
-        if ($subCLs->isEmpty()) {
-            // No available subCL in this color, try next color
-            $colors = $colors->skip(1);
-            if ($colors->isEmpty()) {
-                return null;
-            }
-            
-            $selectedColor = $colors->first();
-            $subCLs = SubCL::where('colorId', $selectedColor->colorId)
-                ->where('eventId', $eventId)
-                ->withCount(['attendees as current_count' => function ($query) {
-                    $query->where('isRegistered', true);
-                }])
-                ->having('current_count', '<', 13)
-                ->orderBy('current_count', 'asc')
-                ->get();
+        if ($subCLs->isNotEmpty()) {
+            // Found an available subCL
+            $selectedSubCL = $subCLs->first();
 
-            if ($subCLs->isEmpty()) {
-                return null;
-            }
+            return [
+                'colorId' => $color->colorId,
+                'color' => $color,
+                'subCLId' => $selectedSubCL->subClId,
+                'subCL' => $selectedSubCL,
+            ];
         }
-
-        // Get the subCL with the least participants
-        $selectedSubCL = $subCLs->first();
-
-        return [
-            'colorId' => $selectedColor->colorId,
-            'color' => $selectedColor,
-            'subCLId' => $selectedSubCL->subClId,
-            'subCL' => $selectedSubCL,
-        ];
     }
+
+    // No available capacity found
+    return null;
 }
+    }
