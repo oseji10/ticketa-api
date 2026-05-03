@@ -28,6 +28,8 @@ use App\Http\Controllers\Api\MealRatingStatisticsController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\AttendeeController;
 
+use App\Http\Controllers\Api\ParticipantMedicalInfoController;
+
 
 Route::prefix('auth')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -240,6 +242,10 @@ Route::middleware(['auth:api', 'facility.scope'])->group(function () {
     // Get statistics
     Route::get('/exits/statistics', [ExitController::class, 'getStatistics']);
 
+
+    // Medical Information Routes
+Route::post('/participant/medical-info', [ParticipantMedicalInfoController::class, 'store']);
+Route::get('/participant/medical-info/{attendeeId}', [ParticipantMedicalInfoController::class, 'show']);
 
     // Color Groups Dashboard
   
